@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Il mio bilancio</title>
+<meta name="theme-color" content="#2a5f9e">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<style>
+  :root{
+    color-scheme:light;
+    --plane:#f4f5f3;--surface:#fcfcfb;--surface-2:#f7f8f5;
+    --ink:#14181c;--ink-2:#52575e;--muted:#8a8f96;
+    --hair:#e4e6e0;--hair-strong:#cfd2ca;
+    --accent:#2a5f9e;--accent-soft:#dfe9f4;
+    --in:#0a8a32;--out:#2a78d6;--warn:#b6771a;--warn-bg:#fbf1de;
+    --good:#0a8a32;--good-bg:#e6f4ea;--seq:#2a78d6;--seq-track:#eceee9;
+  }
+  @media(prefers-color-scheme:dark){:root:where(:not([data-theme="light"])){
+    color-scheme:dark;
+    --plane:#0c0d0e;--surface:#191b1d;--surface-2:#212325;
+    --ink:#f3f4f2;--ink-2:#b9bdc2;--muted:#868b91;
+    --hair:#2b2e30;--hair-strong:#3a3d40;
+    --accent:#5a94d6;--accent-soft:#1e3348;
+    --in:#34b357;--out:#3987e5;--warn:#e0a13a;--warn-bg:#33280f;
+    --good:#34b357;--good-bg:#14301d;--seq:#3987e5;--seq-track:#24262a;
+  }}
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--plane);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.5;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:900px;margin:0 auto;padding:max(20px,env(safe-area-inset-top)) clamp(16px,4vw,28px) 60px;}
+  .num{font-variant-numeric:tabular-nums;}
+  .eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);font-weight:600;margin:22px 0 6px;}
+  h1{font-size:clamp(24px,4vw,32px);line-height:1.1;margin:0;letter-spacing:-.02em;font-weight:700;}
+  .sub{color:var(--ink-2);margin:8px 0 0;font-size:15px;max-width:60ch;}
+  .drop{margin-top:24px;border:2px dashed var(--hair-strong);border-radius:16px;background:var(--surface);padding:34px 20px;text-align:center;transition:.15s;cursor:pointer;display:block;}
+  .drop.over{border-color:var(--accent);background:var(--accent-soft);}
+  .drop .big{font-size:16px;font-weight:600;} .drop .small{font-size:13px;color:var(--muted);margin-top:6px;}
+  .drop input{display:none;}
+  .hint2{font-size:12.5px;color:var(--muted);margin-top:10px;line-height:1.6;} .hint2 code{background:var(--surface-2);padding:1px 5px;border-radius:5px;}
+  .files{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px;}
+  .fchip{font-size:12px;background:var(--surface);border:1px solid var(--hair);border-radius:8px;padding:4px 10px;display:flex;gap:7px;align-items:center;}
+  .fchip .k{color:var(--muted);} .fchip .ok{color:var(--good);font-weight:700;} .fchip .no{color:var(--warn);font-weight:700;}
+  #out{display:none;margin-top:8px;}
+  section{margin-top:30px;}
+  .h{display:flex;align-items:baseline;gap:10px;margin:0 0 4px;} .h h2{font-size:17px;margin:0;} .h .hint{font-size:12.5px;color:var(--muted);}
+  .flow{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:6px;} @media(max-width:620px){.flow{grid-template-columns:1fr;}}
+  .fcard{background:var(--surface);border:1px solid var(--hair);border-radius:14px;padding:15px;display:flex;flex-direction:column;gap:3px;}
+  .fcard .lab{font-size:12px;color:var(--muted);} .fcard .val{font-size:clamp(21px,3.2vw,27px);font-weight:700;letter-spacing:-.02em;}
+  .fcard.inn .val{color:var(--in);} .fcard.o .val{color:var(--out);}
+  .fcard.sav{background:var(--warn-bg);border-color:color-mix(in srgb,var(--warn) 40%,var(--hair));} .fcard.sav.pos{background:var(--good-bg);border-color:color-mix(in srgb,var(--good) 40%,var(--hair));}
+  .fcard.sav .val{color:var(--warn);} .fcard.sav.pos .val{color:var(--good);}
+  .card{background:var(--surface);border:1px solid var(--hair);border-radius:16px;padding:18px;margin-top:10px;}
+  .bars{display:flex;flex-direction:column;gap:9px;}
+  .bar{display:grid;grid-template-columns:150px 1fr 92px;align-items:center;gap:10px;} @media(max-width:560px){.bar{grid-template-columns:104px 1fr 76px;gap:7px;}}
+  .bar .cat{font-size:12.5px;color:var(--ink-2);text-align:right;}
+  .bar .track{background:var(--seq-track);border-radius:4px;height:16px;overflow:hidden;} .bar .fill{height:100%;background:var(--seq);border-radius:4px;min-width:3px;}
+  .bar.q .fill{background:var(--muted);}
+  .bar .v{font-size:12px;font-weight:600;text-align:right;} .bar .v small{color:var(--muted);font-weight:500;}
+  .notes{margin-top:12px;font-size:12.5px;color:var(--ink-2);line-height:1.7;} .notes .t{font-weight:600;color:var(--ink);margin-bottom:3px;}
+  footer{margin-top:34px;padding-top:16px;border-top:1px solid var(--hair);font-size:12px;color:var(--muted);line-height:1.6;}
+  .reset{margin-top:16px;font-size:13px;color:var(--accent);background:none;border:none;cursor:pointer;text-decoration:underline;padding:0;}
+  .priv{margin-top:14px;font-size:12px;color:var(--muted);display:flex;gap:7px;align-items:flex-start;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Il mio bilancio</p>
+    <h1>Carica gli estratti, vedi dove vanno i soldi</h1>
+    <p class="sub">Trascina uno o più CSV (conto, carte): l'app li unisce, riconcilia (niente doppioni) e calcola il bilancio. Tutto resta sul tuo dispositivo.</p>
+  </header>
+
+  <label class="drop" id="drop">
+    <div class="big">Trascina qui i CSV — o tocca per sceglierli</div>
+    <div class="small">conto corrente · carta di credito · carta di debito · Revolut</div>
+    <input type="file" id="file" accept=".csv,text/csv" multiple>
+  </label>
+  <div class="hint2">Formati riconosciuti in automatico: <b>ING conto</b>, <b>ING carta credito</b>, <b>ING carta debito</b>, <b>Revolut</b> (esporta in <code>CSV</code>). Il PDF non è supportato.</div>
+  <div class="files" id="files"></div>
+
+  <div id="out">
+    <section><div class="flow">
+      <div class="fcard inn"><span class="lab">Entrate</span><span class="val num" id="kIn">—</span></div>
+      <div class="fcard o"><span class="lab">Uscite</span><span class="val num" id="kOut">—</span></div>
+      <div class="fcard sav" id="kSavCard"><span class="lab">Risparmio</span><span class="val num" id="kSav">—</span></div>
+    </div></section>
+    <section>
+      <div class="h"><h2>Dove vanno le uscite</h2><span class="hint" id="uscHint"></span></div>
+      <div class="card"><div class="bars" id="bars"></div></div>
+    </section>
+    <section>
+      <div class="card"><div class="notes"><div class="t">Cosa ho fatto con i tuoi file (riconciliazione)</div><ul id="notes"></ul></div></div>
+      <button class="reset" id="reset">↺ Ricomincia con altri file</button>
+    </section>
+  </div>
+
+  <div class="priv"><span>🔒</span><span>App open-source e generica: nessun dato lascia il browser. I movimenti restano in locale sul tuo dispositivo.</span></div>
+  <footer>Motore: parser multi-formato · riconciliazione (dedup carta↔conto, espansione credito, Revolut additivo) · categorie a regole. Gira interamente nel browser. Installabile: aggiungi alla schermata Home (telefono) o installa dalla barra indirizzi (PC).</footer>
+</div>
+
+<script>
+/* ---- MOTORE (regole GENERICHE — nessun dato personale) ---- */
+(function(root){"use strict";
+  function parseCSV(text){const rows=[];let row=[],field="",q=false;
+    for(let i=0;i<text.length;i++){const c=text[i];
+      if(q){if(c==='"'&&text[i+1]==='"'){field+='"';i++;}else if(c==='"')q=false;else field+=c;}
+      else{if(c==='"')q=true;else if(c===",")row.push(field),field="";else if(c==="\n"||c==="\r"){if(c==="\r"&&text[i+1]==="\n")i++;row.push(field);rows.push(row);row=[];field="";}else field+=c;}}
+    if(field.length||row.length){row.push(field);rows.push(row);}
+    return rows.filter(r=>r.some(x=>x.trim()!==""));}
+  function eur(s){s=(s||"").toString().replace(/[+€"]/g,"").trim();if(!s)return 0;s=s.replace(/\./g,"").replace(",",".");const v=parseFloat(s);return isNaN(v)?0:v;}
+  function detectFormat(headers){const h=headers.map(x=>x.trim().toUpperCase());const j=h.join("|");
+    if(j.includes("DATA CONTABILE")&&j.includes("USCITE")&&j.includes("ENTRATE"))return"ing_conto";
+    if(j.includes("DATA REGISTRAZIONE")&&j.includes("IMPORTO IN EURO"))return"ing_credito";
+    if(h[0]==="DATA OPERAZIONE"&&j.includes("IMPORTO IN EURO")&&!j.includes("DATA REGISTRAZIONE"))return"ing_debito";
+    if(j.includes("STARTED DATE")||(j.includes("TYPE")&&j.includes("AMOUNT")))return"revolut";
+    return"unknown";}
+  /* Regole generiche: catene/merchant noti + parole-chiave. Nessun nome proprio locale. */
+  const RULES=[
+    ["Viaggi/Vacanze",/airbnb|booking\.com|\bbooking\b|expedia|trivago|ryanair|easyjet|\bhotel\b|\bb&b\b|ostello|resort|camping/i],
+    ["Casa/Affitti",/locazione|affitto|\brent\b|condominio|amministrazione condomin/i],
+    ["Finanziamenti",/cofidis|findomestic|\bagos\b|compass|\brata\b|prestito|finanziamento|mutuo/i],
+    ["Utenze",/\benel\b|\beni gas\b|\ba2a\b|\bhera\b|\biren\b|\bacea\b|\bedison\b|alperia|\bseab\b|vodafone|\btim\b|\bwind\b|iliad|fastweb|\bluce\b|\bgas\b|\bacqua\b|rifiuti|\btari\b|telepass/i],
+    ["Tasse/PA",/pagopa|pago pa|agenzia delle entrate|\bf24\b|\bspid\b|comune di|bollo auto|\bimu\b|\binps\b|\binail\b/i],
+    ["AI/Tech",/anthropic|openai|chatgpt|\bclaude\b|supabase|vercel|github|cloudflare|\baws\b|google cloud|google.*one|microsoft|hostinger|digitalocean|midjourney|vidiq|\babacus\b|\bfal\b/i],
+    ["Abbonamenti/Streaming",/netflix|spotify|disney|prime video|primevideo|\bnow\b|\bsky\b|mediaset|\bdazn\b|youtube|\bapple\b|google.*play|beatport|soundcloud|patreon|avast|norton|\brti\b|infinity/i],
+    ["Alimentari/Spesa",/despar|conad|\bcoop\b|esselunga|\blidl\b|eurospin|carrefour|\bpam\b|\bmd\b|penny|\baldi\b|supermerc|alimentari|macelleria|panificio|frutta/i],
+    ["Carburante",/\besso\b|\btamoil\b|\bq8\b|\bagip\b|\beni\b|\bip\b|italiana petroli|\bshell\b|distributore|carburante|benzina|\bpv\b/i],
+    ["Ristoranti/Bar/Svago",/ristorant|trattoria|osteria|pizzeria|\bbar\b|\bcaff|pasticc|gelat|\bsushi\b|mcdonald|\bkfc\b|burger|autogrill|enotec|birrer|\bpub\b|tavola calda/i],
+    ["Shopping",/amazon|\bamzn\b|zalando|\bzara\b|\bh&m\b|decathlon|\bikea\b|mediaworld|unieuro|abbigliamento|\bnike\b|adidas/i],
+    ["Salute",/farmacia|\bstudio dr\b|\bdott\b|ospedale|clinica|laboratorio anal|dentist|\bmedic|parafarmac/i],
+    ["Tabacchi",/tabacc|monopoli/i],
+    ["Prelievi/Contante",/prelievo|\batm\b|bancomat/i],
+    ["Commissioni/Banca",/commission|imposta di bollo|\bbolli\b|\bcanone\b|servizio alert|maggiorazione|spese conto|recupero imposta/i],
+  ];
+  function categorize(d){for(const[c,re]of RULES)if(re.test(d))return c;return"Altro/Da rivedere";}
+  function normalize(text,name){const rows=parseCSV(text);if(!rows.length)return null;const fmt=detectFormat(rows[0]);const body=rows.slice(1);
+    const out={name,fmt,entrate:0,usciteRows:[],ccAggregati:[],creditoDettaglio:[],totCredito:0};
+    if(fmt==="ing_conto"){for(const r of body){const usc=r[2],ent=r[3],causale=r[4],desc=r[5];
+      if(!causale||!causale.trim())continue;const u=Math.abs(eur(usc)),e=Math.abs(eur(ent));
+      if(e>0){out.entrate+=e;continue;}if(u===0)continue;
+      if(/addebito carta di credito/i.test(causale)){out.ccAggregati.push(+u.toFixed(2));continue;}
+      out.usciteRows.push({desc:(desc||"")+" "+causale,amt:u});}}
+    else if(fmt==="ing_credito"){for(const r of body){if(!r[2]||/totale/i.test(r[2]))continue;const amt=Math.abs(eur(r[3]));if(amt===0)continue;out.creditoDettaglio.push({desc:r[2],amt});out.totCredito+=amt;}out.totCredito=+out.totCredito.toFixed(2);}
+    else if(fmt==="ing_debito"){for(const r of body){if(!r[1]||/totale/i.test(r[1]))continue;const amt=Math.abs(eur(r[2]));if(amt===0)continue;out.usciteRows.push({desc:r[1],amt});}}
+    else if(fmt==="revolut"){const H=rows[0].map(x=>x.trim().toLowerCase());const di=H.findIndex(x=>x.includes("description"));const ai=H.findIndex(x=>x==="amount");
+      for(const r of body){const amt=eur(r[ai]);if(amt>=0)continue;out.usciteRows.push({desc:r[di]||"",amt:Math.abs(amt)});}}
+    return out;}
+  function consolidate(files){const norm=files.map(f=>normalize(f.text,f.name)).filter(Boolean);
+    const hasConto=norm.some(n=>n.fmt==="ing_conto");const creditoFiles=norm.filter(n=>n.fmt==="ing_credito");
+    const cats={};let entrate=0;const notes=[];const add=(d,a)=>{const c=categorize(d);cats[c]=(cats[c]||0)+a;};
+    for(const n of norm){
+      if(n.fmt==="ing_conto"){entrate+=n.entrate;for(const row of n.usciteRows)add(row.desc,row.amt);
+        for(const agg of n.ccAggregati){const m=creditoFiles.find(cf=>Math.abs(cf.totCredito-agg)<0.5&&!cf._used);
+          if(m){m._used=true;for(const d of m.creditoDettaglio)add(d.desc,d.amt);notes.push("Estratto carta credito €"+agg.toFixed(2)+" espanso nel suo dettaglio.");}
+          else{cats["Carta credito (dettaglio n/d)"]=(cats["Carta credito (dettaglio n/d)"]||0)+agg;notes.push("Addebito carta credito €"+agg.toFixed(2)+": manca il CSV di dettaglio (resta un blocco).");}}}
+      else if(n.fmt==="ing_debito"){if(hasConto){notes.push(n.name+": carta debito già dentro il conto → ignorata per non doppiare.");continue;}for(const row of n.usciteRows)add(row.desc,row.amt);}
+      else if(n.fmt==="ing_credito"){if(n._used)continue;if(!hasConto){for(const d of n.creditoDettaglio)add(d.desc,d.amt);}}
+      else if(n.fmt==="revolut"){for(const row of n.usciteRows)add(row.desc,row.amt);notes.push(n.name+": Revolut aggiunto come conto a parte.");}
+      else{notes.push(n.name+": formato non riconosciuto → saltato.");}}
+    const uscite=Object.values(cats).reduce((a,b)=>a+b,0);
+    const sorted=Object.entries(cats).map(([k,v])=>({cat:k,amt:+v.toFixed(2)})).sort((a,b)=>b.amt-a.amt);
+    return{entrate:+entrate.toFixed(2),uscite:+uscite.toFixed(2),risparmio:+(entrate-uscite).toFixed(2),categorie:sorted,note:notes,formati:norm.map(n=>({name:n.name,fmt:n.fmt}))};}
+  root.BilancioEngine={consolidate};
+})(window);
+
+/* ---- UI ---- */
+const E=(id)=>document.getElementById(id);
+const fmtEUR=(n)=>"€"+n.toLocaleString("it-IT",{minimumFractionDigits:0,maximumFractionDigits:0});
+const FMT_LABEL={ing_conto:"conto ING",ing_credito:"carta credito ING",ing_debito:"carta debito ING",revolut:"Revolut",unknown:"non riconosciuto"};
+let loaded=[];
+const drop=E("drop"),fileInput=E("file");
+["dragenter","dragover"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add("over");}));
+["dragleave","drop"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove("over");}));
+drop.addEventListener("drop",e=>handleFiles(e.dataTransfer.files));
+fileInput.addEventListener("change",e=>handleFiles(e.target.files));
+E("reset").addEventListener("click",()=>{loaded=[];E("files").innerHTML="";E("out").style.display="none";fileInput.value="";});
+function handleFiles(list){const arr=[...list].filter(f=>/\.csv$/i.test(f.name)||f.type==="text/csv");let pending=arr.length;if(!pending)return;
+  arr.forEach(f=>{const r=new FileReader();r.onload=()=>{loaded.push({name:f.name,text:r.result});if(--pending===0)render();};r.readAsText(f);});}
+function render(){
+  const res=window.BilancioEngine.consolidate(loaded.map(f=>({name:f.name,text:f.text})));
+  E("files").innerHTML=res.formati.map(f=>{const ok=f.fmt!=="unknown";return `<span class="fchip"><span class="${ok?'ok':'no'}">${ok?'✓':'!'}</span>${f.name} <span class="k">${FMT_LABEL[f.fmt]}</span></span>`;}).join("");
+  E("kIn").textContent=fmtEUR(res.entrate);E("kOut").textContent=fmtEUR(res.uscite);
+  E("kSav").textContent=(res.risparmio>=0?"+":"−")+fmtEUR(Math.abs(res.risparmio));
+  E("kSavCard").classList.toggle("pos",res.risparmio>=0);
+  const max=res.categorie.length?res.categorie[0].amt:1;
+  E("uscHint").textContent=fmtEUR(res.uscite)+" · "+res.categorie.length+" categorie";
+  E("bars").innerHTML=res.categorie.map(c=>{const pct=Math.round(100*c.amt/(res.uscite||1));const w=Math.max(2,100*c.amt/max);const q=/dettaglio n\/d|Altro/.test(c.cat)?"q":"";
+    return `<div class="bar ${q}"><span class="cat">${c.cat}</span><div class="track"><div class="fill" style="width:${w}%"></div></div><span class="v num">${fmtEUR(c.amt)} <small>${pct}%</small></span></div>`;}).join("");
+  E("notes").innerHTML=(res.note.length?res.note:["Nessuna riconciliazione particolare."]).map(n=>`<li>${n}</li>`).join("");
+  E("out").style.display="block";E("out").scrollIntoView({behavior:"smooth",block:"start"});
+}
+if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));}
+</script>
+</body>
+</html>

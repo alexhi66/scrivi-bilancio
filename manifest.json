@@ -1,0 +1,15 @@
+{
+  "name": "Il mio bilancio",
+  "short_name": "Bilancio",
+  "description": "Bilancio personale: carichi gli estratti CSV e vedi entrate, uscite e risparmio. Tutto nel browser.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f4f5f3",
+  "theme_color": "#2a5f9e",
+  "lang": "it",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
