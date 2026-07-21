@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Il mio bilancio</title>
 <meta name="theme-color" content="#2a5f9e">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://api.github.com; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; base-uri 'none'; form-action 'none'; object-src 'none'; frame-ancestors 'none'">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon.svg">
@@ -109,11 +110,11 @@
     <section><div class="flow">
       <div class="fcard inn"><span class="lab">Entrate</span><span class="val num" id="kIn">—</span></div>
       <div class="fcard o"><span class="lab">Uscite</span><span class="val num" id="kOut">—</span></div>
-      <div class="fcard sav" id="kSavCard"><span class="lab">Risparmio</span><span class="val num" id="kSav">—</span></div>
+      <div class="fcard sav" id="kSavCard"><span class="lab">Risparmio</span><span class="val num" id="kSav">—</span><span class="lab" id="kSavFoot" style="margin-top:2px"></span></div>
     </div></section>
     <section>
       <div class="h"><h2>Dove vanno le uscite</h2><span class="hint" id="uscHint"></span></div>
-      <div class="card"><div class="bars" id="bars"></div></div>
+      <div class="card"><div class="bars" id="bars"></div><div id="reconBox"></div></div>
     </section>
     <section>
       <div class="card"><div class="notes"><div class="t">Cosa ho fatto con i tuoi file (riconciliazione)</div><ul id="notes"></ul></div></div>
@@ -203,17 +204,24 @@ fileInput.addEventListener("change",e=>handleFiles(e.target.files));
 E("reset").addEventListener("click",()=>{loaded=[];E("files").innerHTML="";E("out").style.display="none";fileInput.value="";});
 function handleFiles(list){const arr=[...list].filter(f=>/\.csv$/i.test(f.name)||f.type==="text/csv");let pending=arr.length;if(!pending)return;
   arr.forEach(f=>{const r=new FileReader();r.onload=()=>{loaded.push({name:f.name,text:r.result});if(--pending===0)render();};r.readAsText(f);});}
+const esc=(s)=>String(s==null?"":s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const isNd=(name)=>/dettaglio n\/d|da riconciliare|non categorizz/i.test(name);
 function renderResult(res,formati){
-  E("files").innerHTML=(formati||[]).map(f=>{const ok=f.fmt!=="unknown";return `<span class="fchip"><span class="${ok?'ok':'no'}">${ok?'✓':'!'}</span>${f.name} <span class="k">${FMT_LABEL[f.fmt]}</span></span>`;}).join("");
-  const cats=(res.categorie||[]).map(c=>({cat:c.cat,amt:(c.amt!=null?c.amt:c.importo)}));
+  E("files").innerHTML=(formati||[]).map(f=>{const ok=f.fmt!=="unknown";return `<span class="fchip"><span class="${ok?'ok':'no'}">${ok?'✓':'!'}</span>${esc(f.name)} <span class="k">${esc(FMT_LABEL[f.fmt]||f.fmt)}</span></span>`;}).join("");
+  const allCats=(res.categorie||[]).map(c=>({cat:c.cat,amt:(c.amt!=null?c.amt:c.importo)}));
+  const cats=allCats.filter(c=>!isNd(c.cat));           // categorie vere
+  const nd=allCats.filter(c=>isNd(c.cat));               // "da riconciliare" — NON è spesa in più
   E("kIn").textContent=fmtEUR(res.entrate);E("kOut").textContent=fmtEUR(res.uscite);
   E("kSav").textContent=(res.risparmio>=0?"+":"−")+fmtEUR(Math.abs(res.risparmio));
   E("kSavCard").classList.toggle("pos",res.risparmio>=0);
+  const pctSav=(res.entrate>0)?Math.round(100*res.risparmio/res.entrate):null;
+  E("kSavFoot").textContent=(pctSav!=null)?(pctSav+"% delle entrate"+(pctSav<10?" · margine sottile":"")):"";
   const max=cats.length?cats[0].amt:1;
   E("uscHint").textContent=fmtEUR(res.uscite)+" · "+cats.length+" categorie";
-  E("bars").innerHTML=cats.map(c=>{const pct=Math.round(100*c.amt/(res.uscite||1));const w=Math.max(2,100*c.amt/max);const q=/dettaglio n\/d|Altro/.test(c.cat)?"q":"";
-    return `<div class="bar ${q}"><span class="cat">${c.cat}</span><div class="track"><div class="fill" style="width:${w}%"></div></div><span class="v num">${fmtEUR(c.amt)} <small>${pct}%</small></span></div>`;}).join("");
-  E("notes").innerHTML=((res.note&&res.note.length)?res.note:["—"]).map(n=>`<li>${n}</li>`).join("");
+  E("bars").innerHTML=cats.map(c=>{const pct=Math.round(100*c.amt/(res.uscite||1));const w=Math.max(2,100*c.amt/max);
+    return `<div class="bar"><span class="cat">${esc(c.cat)}</span><div class="track"><div class="fill" style="width:${w}%"></div></div><span class="v num">${fmtEUR(c.amt)} <small>${pct}%</small></span></div>`;}).join("");
+  E("reconBox").innerHTML=nd.length?`<div style="margin-top:11px;padding:9px 11px;background:var(--surface-2);border:1px dashed var(--hair-strong);border-radius:9px;font-size:12px;color:var(--muted)">↺ <b style="color:var(--ink-2)">Da riconciliare</b> (non è una spesa in più): ${nd.map(c=>esc(c.cat)+" "+fmtEUR(c.amt)).join(" · ")}</div>`:"";
+  E("notes").innerHTML=((res.note&&res.note.length)?res.note:["—"]).map(n=>`<li>${esc(n)}</li>`).join("");
   E("out").style.display="block";E("out").scrollIntoView({behavior:"smooth",block:"start"});
 }
 function render(){const res=window.BilancioEngine.consolidate(loaded.map(f=>({name:f.name,text:f.text})));renderResult(res,res.formati);}
