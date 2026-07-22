@@ -1,5 +1,5 @@
 /* Service worker minimale: cache offline dell'app (nessun dato utente qui). */
-const CACHE = "bilancio-v12";
+const CACHE = "bilancio-v13";
 const ASSETS = ["./", "./index.html", "./manifest.json", "./icon.svg"];
 
 self.addEventListener("install", (e) => {

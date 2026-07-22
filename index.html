@@ -109,6 +109,26 @@
   .clarActions button{font-size:13px;padding:8px 14px;border-radius:8px;border:none;cursor:pointer;background:var(--accent);color:#fff;font-weight:600;}
   .clarActions .lnk{background:transparent;color:var(--ink-2);border:1px solid var(--hair-2);}
   .clarNote{font-size:11.5px;color:var(--ink-2);}
+  /* Consulente */
+  .plan-hint{font-size:12.5px;color:var(--ink-2);margin-bottom:12px;line-height:1.55;}
+  .planlist{display:flex;flex-direction:column;gap:1px;}
+  .planrow{display:grid;grid-template-columns:20px 1fr auto;align-items:center;gap:9px;padding:8px 6px;border-radius:9px;cursor:pointer;}
+  .planrow:hover{background:var(--surface-2);}
+  .planrow input{width:17px;height:17px;accent-color:var(--accent);}
+  .planrow .pn{font-size:13px;}.planrow .pc{color:var(--muted);font-size:11px;margin-left:4px;}
+  .planrow .pv{font-size:12.5px;color:var(--ink-2);text-align:right;white-space:nowrap;}
+  .planrow input:checked ~ .pn{text-decoration:line-through;color:var(--muted);}
+  .plan-ctrl{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;margin-bottom:12px;}
+  .plan-ctrl input{width:92px;font-size:14px;padding:7px 9px;border:1px solid var(--hair-2);border-radius:8px;background:var(--plane);color:var(--ink);}
+  .plan-ctrl .orizz{margin-left:auto;display:flex;gap:5px;align-items:center;}
+  .obtn{font-size:12.5px;padding:6px 11px;border:1px solid var(--hair-2);border-radius:8px;background:var(--surface);color:var(--ink-2);cursor:pointer;}
+  .obtn.on{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .plan-proj{display:flex;gap:10px;flex-wrap:wrap;}
+  .projbox{flex:1;min-width:140px;border:1px solid var(--hair);border-radius:12px;padding:13px;background:var(--surface-2);}
+  .projbox .pl{font-size:11.5px;color:var(--muted);}
+  .projbox .pvv{font-size:20px;font-weight:700;letter-spacing:-.02em;margin-top:3px;}
+  .projbox .pvv.good{color:var(--good);}
+  .projbox .pf{font-size:11.5px;color:var(--ink-2);margin-top:2px;}
 </style>
 </head>
 <body>
@@ -211,6 +231,12 @@
       <div class="card c6 dashcard" style="display:none">
         <div class="ct"><h2>Abbonamenti</h2><span class="sub">€/mese · €/anno</span></div>
         <div id="dSub"></div>
+      </div>
+
+      <!-- CONSULENTE -->
+      <div class="card c12 dashcard" style="display:none">
+        <div class="ct"><h2>Consulente — piano risparmio</h2><span class="sub">disdette · proiezione futura</span></div>
+        <div id="dPlan"></div>
       </div>
 
       <!-- NOTE -->
@@ -361,7 +387,40 @@ function renderDashboard(p){
   const subs=(p.abbonamenti||[]).slice().sort((a,b)=>b.mese-a.mese),tot=subs.reduce((a,b)=>a+(b.mese||0),0);
   E("dSub").innerHTML=`<table class="sub"><tbody>`+subs.map(s=>`<tr><td>${esc(s.servizio)} <span style="color:var(--muted);font-size:11px">${esc(s.categoria)}</span></td><td class="num" style="text-align:right">${fmtEUR(s.mese)}/m</td><td class="num" style="text-align:right;color:var(--muted)">${fmtEUR((s.mese||0)*12)}/a</td></tr>`).join("")+`</tbody></table><div style="font-size:11.5px;color:var(--ink-2);margin-top:9px">Totale ≈ <b>${fmtEUR(tot)}/mese</b> · ${fmtEUR(tot*12)}/anno</div>`;
   renderSost(p);
+  renderConsulente(p);
   showDash(true);
+}
+/* Consulente: pianifica disdette e proietta il risparmio nel tempo */
+let PLAN={subs:[],n:12};
+function renderConsulente(p){const host=E("dPlan");if(!host)return;
+  const subs=(p.abbonamenti||[]).slice().sort((a,b)=>(b.mese||0)-(a.mese||0));
+  PLAN.subs=subs;PLAN.n=12;
+  // risparmio "consolidato" di base = risparmio del periodo meno il contante ancora nel borsello
+  const base=Math.max(0,Math.round((p.risparmio||0)-(p.borsello||0)));
+  const byCat={};subs.forEach(s=>{(byCat[s.categoria]=byCat[s.categoria]||[]).push(s);});
+  const ridond=Object.entries(byCat).filter(([,a])=>a.length>=2);
+  let html=`<div class="plan-hint">Spunta i servizi che valuti di <b>disdire</b>: vedi quanto liberi al mese e all'anno, e dove ti porta nel tempo. È una simulazione: nulla viene disdetto davvero.</div>`;
+  html+=`<div class="planlist">`+subs.map((s,i)=>`<label class="planrow"><input type="checkbox" class="plan-chk" data-i="${i}"><span class="pn">${esc(s.servizio)}<span class="pc">${esc(s.categoria)}</span></span><span class="pv num">${fmtEUR(s.mese||0)}/m · ${fmtEUR((s.mese||0)*12)}/a</span></label>`).join("")+`</div>`;
+  if(ridond.length)html+=`<div class="recon" style="margin-top:10px">⚠︎ <b style="color:var(--ink-2)">Possibili ridondanze</b> (più servizi nella stessa area): ${ridond.map(([c,a])=>esc(c)+" ×"+a.length).join(" · ")}</div>`;
+  html+=`<div class="divl"></div>
+    <div class="plan-ctrl"><label for="planBase">Risparmio mensile medio</label><input type="number" id="planBase" value="${base}" min="0" step="10"><span style="color:var(--muted)">€/mese</span>
+      <span class="orizz">Orizzonte <button class="obtn on" data-n="12">12m</button><button class="obtn" data-n="24">24m</button><button class="obtn" data-n="36">36m</button></span></div>
+    <div id="planOut" class="plan-proj"></div>
+    <div style="font-size:11px;color:var(--muted);margin-top:9px">Base = risparmio del periodo al netto del contante nel borsello; correggila col tuo valore medio reale.</div>`;
+  host.innerHTML=html;
+  host.querySelectorAll(".plan-chk").forEach(c=>c.addEventListener("change",updatePlan));
+  E("planBase").addEventListener("input",updatePlan);
+  host.querySelectorAll(".obtn").forEach(btn=>btn.addEventListener("click",()=>{PLAN.n=+btn.dataset.n;host.querySelectorAll(".obtn").forEach(x=>x.classList.toggle("on",x===btn));updatePlan();}));
+  updatePlan();
+}
+function updatePlan(){
+  const cut=[...document.querySelectorAll(".plan-chk")].reduce((a,c)=>a+(c.checked?(PLAN.subs[+c.dataset.i].mese||0):0),0);
+  const base=Math.max(0,parseFloat(E("planBase").value)||0),n=PLAN.n||12;
+  const senza=base*n,con=(base+cut)*n,delta=cut*n;
+  E("planOut").innerHTML=
+    `<div class="projbox"><div class="pl">Liberi tagliando</div><div class="pvv good">${fmtEUR(cut)}<span style="font-size:12px;font-weight:500">/mese</span></div><div class="pf">${fmtEUR(cut*12)}/anno</div></div>`+
+    `<div class="projbox"><div class="pl">Tra ${n} mesi · così come sei</div><div class="pvv">${fmtEUR(senza)}</div></div>`+
+    `<div class="projbox"><div class="pl">Tra ${n} mesi · con le disdette</div><div class="pvv good">${fmtEUR(con)}</div><div class="pf">+${fmtEUR(delta)} dai tagli</div></div>`;
 }
 /* Diagramma di sostenibilità: piano di fase entrate→uscite + gauge del tasso di risparmio */
 function renderSost(p){const host=E("dSost");if(!host)return;
