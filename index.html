@@ -427,7 +427,7 @@ E("clarApply").addEventListener("click",()=>{
   [...E("clarList").querySelectorAll(".clr-row")].forEach(row=>{
     const key=row.querySelector(".clr-key").value.trim();const cat=row.querySelector(".clr-cat").value;
     if(key&&cat&&cat!=="__new__"){addCustomCat(cat);rules=rules.filter(r=>String(r.match).toLowerCase()!==key.toLowerCase());rules.push({match:key,cat});added++;}});
-  if(added){setRules(rules);render();}
+  if(added){setRules(rules);render();saveVaultConfig();}
 });
 E("clarForget").addEventListener("click",()=>{if(confirm("Dimentico tutte le regole che ti ho imparato?")){setRules([]);render();}});
 
@@ -458,7 +458,7 @@ async function loadFromVault(){const cfg=getCfg();if(!cfg)return;setStatus("Cari
     renderResult({entrate:p.entrate,uscite:p.uscite,risparmio:p.risparmio,categorie:p.categorie,note:(p.note||[]).concat(["Dati dal vault"+(p.etichetta?" · "+p.etichetta:"")])},null);
     renderDashboard(p);E("clarifyCard").style.display="none";E("out").scrollIntoView({behavior:"smooth",block:"start"});
     setStatus("✓ Caricato dal vault"+(p.etichetta?" ("+p.etichetta+")":""),"ok");
-    loadJasper(cfg);
+    await loadVaultConfig(cfg);loadJasper(cfg);
   }catch(e){setStatus("Errore: "+e.message,"err");}}
 
 /* ---- Archivio costi non chiari di Jarvis (movimenti-live.json · lettura + scrittura) ---- */
@@ -499,10 +499,37 @@ async function jasperSave(){const cfg=getCfg();if(!cfg||!Array.isArray(mlItems))
   try{let r=await putJasper(cfg);
     if(r.status===409){const s=await fetch(jasperUrl(cfg),{headers:{Authorization:"Bearer "+cfg.token,Accept:"application/vnd.github+json"}});
       if(s.ok){const d=await s.json();mlSha=d.sha;mlItems=JSON.parse(b64ToUtf8(d.content)||"[]");applyJasperChoices(rows);r=await putJasper(cfg);}}
-    if(r.ok){const d=await r.json();if(d.content&&d.content.sha)mlSha=d.content.sha;E("jasperMsg").textContent="✓ Salvato nel vault";renderJasper();}
+    if(r.ok){const d=await r.json();if(d.content&&d.content.sha)mlSha=d.content.sha;E("jasperMsg").textContent="✓ Salvato nel vault";renderJasper();saveVaultConfig(cfg);}
     else E("jasperMsg").textContent="Errore "+r.status+" — controlla che il token abbia permesso di scrittura.";
   }catch(e){E("jasperMsg").textContent="Errore: "+e.message;}}
 E("jasperSave").addEventListener("click",jasperSave);
+
+/* ---- Sync categorie + regole nel vault (config-app.json) → disponibili su ogni dispositivo ---- */
+const ghUrl=(cfg,path)=>"https://api.github.com/repos/"+cfg.owner+"/"+cfg.repo+"/contents/"+path.split("/").map(encodeURIComponent).join("/");
+let cfgSha=null;
+function mergeConfig(remote){
+  const remCats=Array.isArray(remote.categorie)?remote.categorie:[];
+  const mergedCats=[...new Set(remCats.concat(getCustomCats()))].filter(c=>!CATS.includes(c));
+  try{localStorage.setItem(CUSTOM_KEY,JSON.stringify(mergedCats));}catch(e){}
+  const map={};(Array.isArray(remote.regole)?remote.regole:[]).forEach(x=>{if(x&&x.match)map[String(x.match).toLowerCase()]=x;});
+  getRules().forEach(x=>{if(x&&x.match)map[String(x.match).toLowerCase()]=x;});
+  setRules(Object.values(map));
+}
+const cfgHeaders=(cfg)=>({Authorization:"Bearer "+cfg.token,Accept:"application/vnd.github+json"});
+async function loadVaultConfig(cfg){try{
+  const r=await fetch(ghUrl(cfg,"config-app.json"),{headers:cfgHeaders(cfg)});
+  if(!r.ok){cfgSha=null;return;}
+  const data=await r.json();cfgSha=data.sha;mergeConfig(JSON.parse(b64ToUtf8(data.content)||"{}"));
+}catch(e){}}
+async function saveVaultConfig(cfgArg){const cfg=cfgArg||getCfg();if(!cfg||!cfg.token)return;
+  const build=()=>utf8ToB64(JSON.stringify({categorie:getCustomCats(),regole:getRules()},null,2));
+  try{const body={message:"App: sync categorie e regole (multi-dispositivo)",content:build()};if(cfgSha)body.sha=cfgSha;
+    let r=await fetch(ghUrl(cfg,"config-app.json"),{method:"PUT",headers:cfgHeaders(cfg),body:JSON.stringify(body)});
+    if(r.status===409){const s=await fetch(ghUrl(cfg,"config-app.json"),{headers:cfgHeaders(cfg)});
+      if(s.ok){const d=await s.json();cfgSha=d.sha;mergeConfig(JSON.parse(b64ToUtf8(d.content)||"{}"));
+        r=await fetch(ghUrl(cfg,"config-app.json"),{method:"PUT",headers:cfgHeaders(cfg),body:JSON.stringify({message:"App: sync categorie e regole (merge)",content:build(),sha:cfgSha})});}}
+    if(r.ok){const d=await r.json();if(d.content&&d.content.sha)cfgSha=d.content.sha;}
+  }catch(e){}}
 (function init(){const cfg=getCfg();if(cfg){E("cfgOwner").value=cfg.owner||"";E("cfgRepo").value=cfg.repo||"";E("cfgPath").value=cfg.path||"costi-dati.json";E("cfgToken").value=cfg.token||"";setStatus("Collegato ("+cfg.owner+"/"+cfg.repo+")","ok");loadFromVault();}})();
 if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));}
 </script>
