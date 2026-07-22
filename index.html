@@ -158,6 +158,16 @@
         </div>
       </div>
 
+      <!-- DA CHIARIRE · DA JASPER (vault) -->
+      <div class="card c12 clarify" id="jasperCard" style="display:none">
+        <div class="ct"><h2>📥 Da chiarire — segnalati da Jasper</h2><span class="sub" id="jasperHint"></span></div>
+        <div id="jasperList"></div>
+        <div class="clarActions">
+          <button id="jasperSave">✓ Salva nel vault</button>
+          <span class="clarNote" id="jasperMsg"></span>
+        </div>
+      </div>
+
       <!-- CATEGORIE -->
       <div class="card c7">
         <div class="ct"><h2>Dove vanno le uscite</h2><span class="sub" id="uscHint"></span></div>
@@ -316,10 +326,12 @@ function renderDashboard(p){
   if(!p||!p.per_strumento){showDash(false);return;}
   E("dWfall").innerHTML=barsRow([{label:"Entrate",val:p.entrate,color:"var(--in)"},{label:"Uscite",val:p.uscite,color:"var(--out)",sign:"−"},{label:"= Risparmio",val:p.risparmio,color:"var(--warn)",sign:(p.risparmio>=0?"+":"−")}]);
   const pa=p.patrimonio||{};
-  E("dPatr").innerHTML=`<div class="ct"><h2 style="font-size:12.5px">Patrimonio per conto</h2><span class="sub">l'illusione del solo ING</span></div><div class="bars">`+barsRow([
+  const patrRows=[
     {label:"Conto ING",val:pa.ing_delta||0,color:"var(--in)",sign:((pa.ing_delta||0)>=0?"+":"−")},
-    {label:"Revolut",val:pa.revolut_delta||0,color:"var(--warn)",sign:((pa.revolut_delta||0)>=0?"+":"−")},
-    {label:"= Netto reale",val:pa.netto||0,color:"var(--accent)",sign:((pa.netto||0)>=0?"+":"−")}])+`</div>`;
+    {label:"Revolut",val:pa.revolut_delta||0,color:"var(--warn)",sign:((pa.revolut_delta||0)>=0?"+":"−")}];
+  if(pa.contante)patrRows.push({label:"Contante (borsello)",val:pa.contante,color:"var(--accent)",sign:"+"});
+  patrRows.push({label:"= Netto reale",val:pa.netto||0,color:"var(--accent)",sign:((pa.netto||0)>=0?"+":"−")});
+  E("dPatr").innerHTML=`<div class="ct"><h2 style="font-size:12.5px">Patrimonio per conto</h2><span class="sub">l'illusione del solo ING</span></div><div class="bars">`+barsRow(patrRows)+`</div>`+(pa.contante?`<div style="font-size:11px;color:var(--ink-2);margin-top:8px">Il contante nel borsello è liquidità da spendere, non risparmio consolidato.</div>`:``);
   E("dNat").innerHTML=barsRow((p.per_natura||[]).map(n=>({label:n.nome,val:n.importo})));
   E("dStrum").innerHTML=barsRow((p.per_strumento||[]).map(n=>({label:n.nome,val:n.importo})));
   const sw=p.servizi_web||{};E("dWeb").innerHTML=barsRow(Object.keys(sw).map(k=>({label:k,val:sw[k]})));
@@ -344,7 +356,7 @@ function renderClarify(list){const card=E("clarifyCard");list=list||[];const rul
       else sel.value="";}
   }));
 }
-function render(){const res=window.BilancioEngine.consolidate(loaded.map(f=>({name:f.name,text:f.text})),getRules());renderResult(res,res.formati);renderClarify(res.daChiarire);showDash(false);E("out").scrollIntoView({behavior:"smooth",block:"start"});}
+function render(){const res=window.BilancioEngine.consolidate(loaded.map(f=>({name:f.name,text:f.text})),getRules());renderResult(res,res.formati);renderClarify(res.daChiarire);E("jasperCard").style.display="none";showDash(false);E("out").scrollIntoView({behavior:"smooth",block:"start"});}
 E("clarApply").addEventListener("click",()=>{
   let rules=getRules(),added=0;
   [...E("clarList").querySelectorAll(".clr-row")].forEach(row=>{
@@ -381,7 +393,52 @@ async function loadFromVault(){const cfg=getCfg();if(!cfg)return;setStatus("Cari
     renderResult({entrate:p.entrate,uscite:p.uscite,risparmio:p.risparmio,categorie:p.categorie,note:(p.note||[]).concat(["Dati dal vault"+(p.etichetta?" · "+p.etichetta:"")])},null);
     renderDashboard(p);E("clarifyCard").style.display="none";E("out").scrollIntoView({behavior:"smooth",block:"start"});
     setStatus("✓ Caricato dal vault"+(p.etichetta?" ("+p.etichetta+")":""),"ok");
+    loadJasper(cfg);
   }catch(e){setStatus("Errore: "+e.message,"err");}}
+
+/* ---- Archivio costi non chiari di Jarvis (movimenti-live.json · lettura + scrittura) ---- */
+const ML_PATH="movimenti-live.json";
+let mlItems=null,mlSha=null;
+const utf8ToB64=(s)=>btoa(new Uint8Array(new TextEncoder().encode(s)).reduce((a,c)=>a+String.fromCharCode(c),""));
+const b64ToUtf8=(b)=>new TextDecoder("utf-8").decode(Uint8Array.from(atob((b||"").replace(/\s/g,"")),c=>c.charCodeAt(0)));
+const jasperUrl=(cfg)=>"https://api.github.com/repos/"+cfg.owner+"/"+cfg.repo+"/contents/"+ML_PATH.split("/").map(encodeURIComponent).join("/");
+const isDaChiarire=(m)=>m.categoria==="Altro/Da rivedere"||m.stato==="da definire";
+async function loadJasper(cfg){try{
+  const r=await fetch(jasperUrl(cfg),{headers:{Authorization:"Bearer "+cfg.token,Accept:"application/vnd.github+json"}});
+  if(!r.ok){E("jasperCard").style.display="none";mlItems=null;return;}
+  const data=await r.json();mlSha=data.sha;mlItems=JSON.parse(b64ToUtf8(data.content)||"[]");renderJasper();
+}catch(e){E("jasperCard").style.display="none";}}
+function renderJasper(){const card=E("jasperCard");
+  if(!Array.isArray(mlItems)){card.style.display="none";return;}
+  const todo=mlItems.filter(isDaChiarire);
+  if(!todo.length){card.style.display="none";E("jasperMsg").textContent="";return;}
+  const tot=todo.reduce((a,b)=>a+Math.abs(b.importo||0),0);
+  E("jasperHint").textContent=todo.length+" voci · "+fmtEUR(tot)+" — Jasper le ha raccolte, tu dai la categoria";
+  E("jasperList").innerHTML=todo.map(m=>`<div class="clr-row" data-id="${esc(m.id)}">
+    <span class="clr-desc" title="${esc(m.nota||'')}"><b>${fmtEUR(Math.abs(m.importo||0))}</b> · ${esc(m.merchant||'?')} <span style="color:var(--muted)">${esc(m.strumento||'')} · ${esc(m.data||'')}</span>${m.nota?'<br><span style="color:var(--muted);font-size:11px">'+esc(m.nota)+'</span>':''}</span>
+    <span></span>
+    <select class="clr-cat">${catOptions()}</select></div>`).join("");
+  card.style.display="";
+  E("jasperList").querySelectorAll(".clr-cat").forEach(sel=>sel.addEventListener("change",()=>{
+    if(sel.value==="__new__"){const nc=prompt("Nome della nuova categoria:");
+      if(nc&&nc.trim()){const o=document.createElement("option");o.textContent=nc.trim();o.selected=true;sel.insertBefore(o,sel.lastElementChild);}else sel.value="";}
+  }));
+}
+function applyJasperChoices(rows){let n=0;rows.forEach(row=>{const id=row.getAttribute("data-id"),cat=row.querySelector(".clr-cat").value;
+  if(cat&&cat!=="__new__"){const m=mlItems.find(x=>x.id===id);if(m){m.categoria=cat;if(m.stato==="da definire")m.stato="live";n++;}}});return n;}
+async function putJasper(cfg){return fetch(jasperUrl(cfg),{method:"PUT",headers:{Authorization:"Bearer "+cfg.token,Accept:"application/vnd.github+json"},
+  body:JSON.stringify({message:"App: categorie assegnate ai costi non chiari",content:utf8ToB64(JSON.stringify(mlItems,null,2)),sha:mlSha})});}
+async function jasperSave(){const cfg=getCfg();if(!cfg||!Array.isArray(mlItems))return;
+  const rows=[...E("jasperList").querySelectorAll(".clr-row")];
+  if(!applyJasperChoices(rows)){E("jasperMsg").textContent="Assegna almeno una categoria.";return;}
+  E("jasperMsg").textContent="Salvo…";
+  try{let r=await putJasper(cfg);
+    if(r.status===409){const s=await fetch(jasperUrl(cfg),{headers:{Authorization:"Bearer "+cfg.token,Accept:"application/vnd.github+json"}});
+      if(s.ok){const d=await s.json();mlSha=d.sha;mlItems=JSON.parse(b64ToUtf8(d.content)||"[]");applyJasperChoices(rows);r=await putJasper(cfg);}}
+    if(r.ok){const d=await r.json();if(d.content&&d.content.sha)mlSha=d.content.sha;E("jasperMsg").textContent="✓ Salvato nel vault";renderJasper();}
+    else E("jasperMsg").textContent="Errore "+r.status+" — controlla che il token abbia permesso di scrittura.";
+  }catch(e){E("jasperMsg").textContent="Errore: "+e.message;}}
+E("jasperSave").addEventListener("click",jasperSave);
 (function init(){const cfg=getCfg();if(cfg){E("cfgOwner").value=cfg.owner||"";E("cfgRepo").value=cfg.repo||"";E("cfgPath").value=cfg.path||"costi-dati.json";E("cfgToken").value=cfg.token||"";setStatus("Collegato ("+cfg.owner+"/"+cfg.repo+")","ok");loadFromVault();}})();
 if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));}
 </script>
