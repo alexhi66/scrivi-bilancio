@@ -148,6 +148,7 @@
 
   <div class="vaultbar">
     <button id="cfgBtn" class="cfgbtn">⚙ Collega al vault</button>
+    <button id="csvBtn" class="cfgbtn" hidden>＋ Carica CSV</button>
     <span id="vaultStatus" class="vstatus"></span>
   </div>
   <div id="cfgPanel" class="cfgpanel" hidden>
@@ -536,6 +537,12 @@ const CFG_KEY="bilancio_cfg";
 const getCfg=()=>{try{return JSON.parse(localStorage.getItem(CFG_KEY)||"null");}catch(e){return null;}};
 const setStatus=(m,c)=>{const s=E("vaultStatus");s.textContent=m;s.className="vstatus"+(c?" "+c:"");};
 E("cfgBtn").addEventListener("click",()=>{E("cfgPanel").hidden=!E("cfgPanel").hidden;});
+/* con i dati dal vault, l'area "carica CSV" si collassa: la dashboard è protagonista.
+   Il bottone ＋ Carica CSV la riapre se serve caricare un estratto. */
+function collapseUpload(on){const d=E("drop"),h2=document.querySelector(".hint2");
+  if(d)d.style.display=on?"none":"";if(h2)h2.style.display=on?"none":"";E("csvBtn").hidden=!on;}
+E("csvBtn").addEventListener("click",()=>{const open=E("drop").style.display==="none";const h2=document.querySelector(".hint2");
+  E("drop").style.display=open?"":"none";if(h2)h2.style.display=open?"":"none";E("csvBtn").textContent=open?"− Nascondi CSV":"＋ Carica CSV";});
 E("cfgClear").addEventListener("click",()=>{localStorage.removeItem(CFG_KEY);E("cfgToken").value="";setStatus("Token dimenticato.","");});
 E("cfgSave").addEventListener("click",()=>{const cfg={owner:E("cfgOwner").value.trim(),repo:E("cfgRepo").value.trim(),path:(E("cfgPath").value.trim()||"costi-dati.json"),token:E("cfgToken").value.trim()};
   if(!cfg.owner||!cfg.repo||!cfg.token){setStatus("Compila owner, repo e token.","err");return;}
@@ -549,6 +556,7 @@ async function loadFromVault(){const cfg=getCfg();if(!cfg)return;setStatus("Cari
     renderResult({entrate:p.entrate,uscite:p.uscite,risparmio:p.risparmio,categorie:p.categorie,note:(p.note||[]).concat(["Dati dal vault"+(p.etichetta?" · "+p.etichetta:"")])},null);
     renderDashboard(p);E("clarifyCard").style.display="none";E("out").scrollIntoView({behavior:"smooth",block:"start"});
     setStatus("✓ Caricato dal vault"+(p.etichetta?" ("+p.etichetta+")":""),"ok");
+    collapseUpload(true);   // dati dal vault presenti → la dashboard è protagonista, upload in secondo piano
     await loadVaultConfig(cfg);loadJasper(cfg);
   }catch(e){setStatus("Errore: "+e.message,"err");}}
 
