@@ -166,6 +166,7 @@
 
   <div class="vaultbar">
     <button id="cfgBtn" class="cfgbtn">⚙ Collega al vault</button>
+    <button id="refreshBtn" class="cfgbtn" hidden>↻ Aggiorna</button>
     <button id="csvBtn" class="cfgbtn" hidden>＋ Carica CSV</button>
     <span id="vaultStatus" class="vstatus"></span>
   </div>
@@ -591,6 +592,7 @@ const CFG_KEY="bilancio_cfg";
 const getCfg=()=>{try{return JSON.parse(localStorage.getItem(CFG_KEY)||"null");}catch(e){return null;}};
 const setStatus=(m,c)=>{const s=E("vaultStatus");s.textContent=m;s.className="vstatus"+(c?" "+c:"");};
 E("cfgBtn").addEventListener("click",()=>{E("cfgPanel").hidden=!E("cfgPanel").hidden;});
+E("refreshBtn").addEventListener("click",()=>loadFromVault());
 /* con i dati dal vault, l'area "carica CSV" si collassa: la dashboard è protagonista.
    Il bottone ＋ Carica CSV la riapre se serve caricare un estratto. */
 function collapseUpload(on){const d=E("drop"),h2=document.querySelector(".hint2");
@@ -601,7 +603,10 @@ E("cfgClear").addEventListener("click",()=>{localStorage.removeItem(CFG_KEY);E("
 E("cfgSave").addEventListener("click",()=>{const cfg={owner:E("cfgOwner").value.trim(),repo:E("cfgRepo").value.trim(),path:(E("cfgPath").value.trim()||"costi-dati.json"),token:E("cfgToken").value.trim()};
   if(!cfg.owner||!cfg.repo||!cfg.token){setStatus("Compila owner, repo e token.","err");return;}
   localStorage.setItem(CFG_KEY,JSON.stringify(cfg));E("cfgPanel").hidden=true;loadFromVault();});
-async function loadFromVault(){const cfg=getCfg();if(!cfg)return;setStatus("Carico dal vault…","");
+async function loadFromVault(){const cfg=getCfg();if(!cfg)return;E("refreshBtn").hidden=false;
+  const _rb=E("refreshBtn");_rb.disabled=true;_rb.textContent="↻ Aggiorno…";
+  const _done=()=>{_rb.disabled=false;_rb.textContent="↻ Aggiorna";};
+  setStatus("Carico dal vault…","");
   try{const url="https://api.github.com/repos/"+cfg.owner+"/"+cfg.repo+"/contents/"+cfg.path.split("/").map(encodeURIComponent).join("/");
     const r=await fetch(url,{headers:{Authorization:"Bearer "+cfg.token,Accept:"application/vnd.github+json"}});
     if(!r.ok){setStatus("Errore "+r.status+" — controlla token, owner e repo.","err");return;}
@@ -612,7 +617,7 @@ async function loadFromVault(){const cfg=getCfg();if(!cfg)return;setStatus("Cari
     setStatus("✓ Caricato dal vault"+(p.etichetta?" ("+p.etichetta+")":""),"ok");
     collapseUpload(true);   // dati dal vault presenti → la dashboard è protagonista, upload in secondo piano
     await loadVaultConfig(cfg);loadJasper(cfg);
-  }catch(e){setStatus("Errore: "+e.message,"err");}}
+  }catch(e){setStatus("Errore: "+e.message,"err");}finally{_done();}}
 
 /* ---- Archivio costi non chiari di Jarvis (movimenti-live.json · lettura + scrittura) ---- */
 const ML_PATH="movimenti-live.json";
