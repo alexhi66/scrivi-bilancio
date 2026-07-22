@@ -305,6 +305,15 @@ const CATS=["Casa/Affitti","Matteo — Affitto","Matteo — Altre spese","Utenze
 const RULES_KEY="bilancio_rules";
 const getRules=()=>{try{return JSON.parse(localStorage.getItem(RULES_KEY)||"[]");}catch(e){return [];}};
 const setRules=(r)=>{try{localStorage.setItem(RULES_KEY,JSON.stringify(r));}catch(e){}};
+/* categorie personalizzate: persistono e restano selezionabili nei menu */
+const CUSTOM_KEY="bilancio_cats";
+const getCustomCats=()=>{try{return JSON.parse(localStorage.getItem(CUSTOM_KEY)||"[]");}catch(e){return [];}};
+const addCustomCat=(c)=>{c=(c||"").trim();if(!c)return;const l=getCustomCats();if(!l.includes(c)&&!CATS.includes(c)){l.push(c);try{localStorage.setItem(CUSTOM_KEY,JSON.stringify(l));}catch(e){}}};
+const allCats=()=>CATS.concat(getCustomCats().filter(c=>!CATS.includes(c)));
+/* suggerisce la categoria da una regola già insegnata (così i "simili" ci finiscono) */
+const suggestCat=(m)=>{const s=((m.merchant||"")+" "+(m.nota||"")+" "+(m.strumento||"")).toLowerCase();for(const r of getRules()){if(r.match&&s.includes(String(r.match).toLowerCase()))return r.cat;}return "";};
+function addCustomCatEverywhere(name){addCustomCat(name);document.querySelectorAll("select.clr-cat").forEach(sel=>{if(![...sel.options].some(o=>o.textContent===name)){const o=document.createElement("option");o.textContent=name;sel.insertBefore(o,sel.lastElementChild);}});}
+function catSelectHandler(sel){if(sel.value==="__new__"){const nc=prompt("Nome della nuova categoria:");if(nc&&nc.trim()){addCustomCatEverywhere(nc.trim());sel.value=nc.trim();}else sel.value="";}}
 
 function showDash(on){document.querySelectorAll(".dashcard").forEach(el=>el.style.display=on?"":"none");}
 
@@ -391,7 +400,7 @@ function renderSost(p){const host=E("dSost");if(!host)return;
     <span style="color:var(--ink-2)">risparmio ${(S>=0?"+":"−")+fmtEUR(Math.abs(S))} · tasso ${rTxt}</span></div>`;
   host.innerHTML=verdict+plane+gauge;
 }
-function catOptions(){return `<option value="">— scegli categoria —</option>`+CATS.map(c=>`<option>${esc(c)}</option>`).join("")+`<option value="__new__">➕ Nuova categoria…</option>`;}
+function catOptions(sel){return `<option value="">— scegli categoria —</option>`+allCats().map(c=>`<option${c===sel?" selected":""}>${esc(c)}</option>`).join("")+`<option value="__new__">➕ Nuova categoria…</option>`;}
 function renderClarify(list){const card=E("clarifyCard");list=list||[];const rules=getRules();
   E("clarSaved").textContent=rules.length?("🧠 "+rules.length+" regole apprese"):"";
   if(!list.length){card.style.display="none";return;}
@@ -402,18 +411,14 @@ function renderClarify(list){const card=E("clarifyCard");list=list||[];const rul
     <input class="clr-key" value="${esc(it.key)}" title="parola chiave che riconosce questa spesa">
     <select class="clr-cat">${catOptions()}</select></div>`).join("");
   card.style.display="";
-  E("clarList").querySelectorAll(".clr-cat").forEach(sel=>sel.addEventListener("change",()=>{
-    if(sel.value==="__new__"){const nc=prompt("Nome della nuova categoria:");
-      if(nc&&nc.trim()){const o=document.createElement("option");o.textContent=nc.trim();o.selected=true;sel.insertBefore(o,sel.lastElementChild);}
-      else sel.value="";}
-  }));
+  E("clarList").querySelectorAll(".clr-cat").forEach(sel=>sel.addEventListener("change",()=>catSelectHandler(sel)));
 }
 function render(){const res=window.BilancioEngine.consolidate(loaded.map(f=>({name:f.name,text:f.text})),getRules());renderResult(res,res.formati);renderClarify(res.daChiarire);E("jasperCard").style.display="none";showDash(false);E("out").scrollIntoView({behavior:"smooth",block:"start"});}
 E("clarApply").addEventListener("click",()=>{
   let rules=getRules(),added=0;
   [...E("clarList").querySelectorAll(".clr-row")].forEach(row=>{
     const key=row.querySelector(".clr-key").value.trim();const cat=row.querySelector(".clr-cat").value;
-    if(key&&cat&&cat!=="__new__"){rules=rules.filter(r=>String(r.match).toLowerCase()!==key.toLowerCase());rules.push({match:key,cat});added++;}});
+    if(key&&cat&&cat!=="__new__"){addCustomCat(cat);rules=rules.filter(r=>String(r.match).toLowerCase()!==key.toLowerCase());rules.push({match:key,cat});added++;}});
   if(added){setRules(rules);render();}
 });
 E("clarForget").addEventListener("click",()=>{if(confirm("Dimentico tutte le regole che ti ho imparato?")){setRules([]);render();}});
@@ -469,15 +474,14 @@ function renderJasper(){const card=E("jasperCard");
   E("jasperList").innerHTML=todo.map(m=>`<div class="clr-row" data-id="${esc(m.id)}">
     <span class="clr-desc" title="${esc(m.nota||'')}"><b>${fmtEUR(Math.abs(m.importo||0))}</b> · ${esc(m.merchant||'?')} <span style="color:var(--muted)">${esc(m.strumento||'')} · ${esc(m.data||'')}</span>${m.nota?'<br><span style="color:var(--muted);font-size:11px">'+esc(m.nota)+'</span>':''}</span>
     <span></span>
-    <select class="clr-cat">${catOptions()}</select></div>`).join("");
+    <select class="clr-cat">${catOptions(suggestCat(m))}</select></div>`).join("");
   card.style.display="";
-  E("jasperList").querySelectorAll(".clr-cat").forEach(sel=>sel.addEventListener("change",()=>{
-    if(sel.value==="__new__"){const nc=prompt("Nome della nuova categoria:");
-      if(nc&&nc.trim()){const o=document.createElement("option");o.textContent=nc.trim();o.selected=true;sel.insertBefore(o,sel.lastElementChild);}else sel.value="";}
-  }));
+  E("jasperList").querySelectorAll(".clr-cat").forEach(sel=>sel.addEventListener("change",()=>catSelectHandler(sel)));
 }
-function applyJasperChoices(rows){let n=0;rows.forEach(row=>{const id=row.getAttribute("data-id"),cat=row.querySelector(".clr-cat").value;
-  if(cat&&cat!=="__new__"){const m=mlItems.find(x=>x.id===id);if(m){m.categoria=cat;if(m.stato==="da definire")m.stato="live";n++;}}});return n;}
+function applyJasperChoices(rows){let n=0,rules=getRules();rows.forEach(row=>{const id=row.getAttribute("data-id"),cat=row.querySelector(".clr-cat").value;
+  if(cat&&cat!=="__new__"){const m=mlItems.find(x=>x.id===id);if(m){m.categoria=cat;if(m.stato==="da definire")m.stato="live";addCustomCat(cat);
+    const key=(m.merchant||"").trim();if(key){rules=rules.filter(r=>String(r.match).toLowerCase()!==key.toLowerCase());rules.push({match:key,cat});}n++;}}});
+  if(n)setRules(rules);return n;}
 async function putJasper(cfg){return fetch(jasperUrl(cfg),{method:"PUT",headers:{Authorization:"Bearer "+cfg.token,Accept:"application/vnd.github+json"},
   body:JSON.stringify({message:"App: categorie assegnate ai costi non chiari",content:utf8ToB64(JSON.stringify(mlItems,null,2)),sha:mlSha})});}
 async function jasperSave(){const cfg=getCfg();if(!cfg||!Array.isArray(mlItems))return;
