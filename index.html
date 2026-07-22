@@ -120,6 +120,14 @@
       <div class="card"><div class="notes"><div class="t">Cosa ho fatto con i tuoi file (riconciliazione)</div><ul id="notes"></ul></div></div>
       <button class="reset" id="reset">↺ Ricomincia con altri file</button>
     </section>
+
+    <div id="dash" style="display:none">
+      <section><div class="h"><h2>Bilancio &amp; patrimonio</h2></div><div class="card"><div class="bars" id="dWfall"></div><div style="border-top:1px solid var(--hair);margin:13px 0 4px"></div><div id="dPatr"></div></div></section>
+      <section><div class="h"><h2>Per natura</h2><span class="hint">fisse · abbonamenti · consumo</span></div><div class="card"><div class="bars" id="dNat"></div></div></section>
+      <section><div class="h"><h2>Da dove escono i soldi</h2><span class="hint">per strumento</span></div><div class="card"><div class="bars" id="dStrum"></div></div></section>
+      <section><div class="h"><h2>Servizi web</h2><span class="hint">€/mese stimato</span></div><div class="card"><div class="bars" id="dWeb"></div></div></section>
+      <section><div class="h"><h2>Abbonamenti</h2><span class="hint">€/mese · €/anno</span></div><div class="card"><div id="dSub"></div></div></section>
+    </div>
   </div>
 
   <div class="priv"><span>🔒</span><span>App open-source e generica: nessun dato lascia il browser. I movimenti restano in locale sul tuo dispositivo.</span></div>
@@ -224,7 +232,35 @@ function renderResult(res,formati){
   E("notes").innerHTML=((res.note&&res.note.length)?res.note:["—"]).map(n=>`<li>${esc(n)}</li>`).join("");
   E("out").style.display="block";E("out").scrollIntoView({behavior:"smooth",block:"start"});
 }
-function render(){const res=window.BilancioEngine.consolidate(loaded.map(f=>({name:f.name,text:f.text})));renderResult(res,res.formati);}
+function render(){const res=window.BilancioEngine.consolidate(loaded.map(f=>({name:f.name,text:f.text})));renderResult(res,res.formati);if(E("dash"))E("dash").style.display="none";}
+
+function barsRow(items){
+  const max=Math.max(1,...items.map(i=>Math.abs(i.val)));
+  return items.map(i=>{const w=Math.max(2,100*Math.abs(i.val)/max);
+    return `<div class="bar"><span class="cat">${esc(i.label)}</span><div class="track"><div class="fill" style="width:${w}%${i.color?';background:'+i.color:''}"></div></div><span class="v num">${i.sign||''}${fmtEUR(Math.abs(i.val))}</span></div>`;}).join("");
+}
+function renderDashboard(p){
+  if(!p||!p.per_strumento){E("dash").style.display="none";return;}
+  E("dWfall").innerHTML=barsRow([
+    {label:"Entrate",val:p.entrate,color:"var(--in)"},
+    {label:"Uscite",val:p.uscite,color:"var(--out)",sign:"−"},
+    {label:"= Risparmio",val:p.risparmio,color:"var(--warn)",sign:(p.risparmio>=0?"+":"−")},
+  ]);
+  const pa=p.patrimonio||{};
+  E("dPatr").innerHTML=`<div class="h" style="margin:6px 0 6px"><h2 style="font-size:13px">Patrimonio per conto</h2><span class="hint">l'illusione del solo ING</span></div><div class="bars">`+barsRow([
+    {label:"Conto ING",val:pa.ing_delta||0,color:"var(--in)",sign:((pa.ing_delta||0)>=0?"+":"−")},
+    {label:"Revolut",val:pa.revolut_delta||0,color:"var(--warn)",sign:((pa.revolut_delta||0)>=0?"+":"−")},
+    {label:"= Netto reale",val:pa.netto||0,color:"var(--accent)",sign:((pa.netto||0)>=0?"+":"−")},
+  ])+`</div>`;
+  E("dNat").innerHTML=barsRow((p.per_natura||[]).map(n=>({label:n.nome,val:n.importo})));
+  E("dStrum").innerHTML=barsRow((p.per_strumento||[]).map(n=>({label:n.nome,val:n.importo})));
+  const sw=p.servizi_web||{};
+  E("dWeb").innerHTML=barsRow(Object.keys(sw).map(k=>({label:k,val:sw[k]})));
+  const subs=(p.abbonamenti||[]).slice().sort((a,b)=>b.mese-a.mese);
+  const totSub=subs.reduce((a,b)=>a+(b.mese||0),0);
+  E("dSub").innerHTML=`<table style="width:100%;border-collapse:collapse;font-size:12.5px"><tbody>`+subs.map(s=>`<tr><td style="padding:6px 4px;border-bottom:1px solid var(--hair)">${esc(s.servizio)} <span style="color:var(--muted);font-size:11px">${esc(s.categoria)}</span></td><td class="num" style="padding:6px 4px;text-align:right;border-bottom:1px solid var(--hair)">${fmtEUR(s.mese)}/m</td><td class="num" style="padding:6px 4px;text-align:right;border-bottom:1px solid var(--hair);color:var(--muted)">${fmtEUR((s.mese||0)*12)}/a</td></tr>`).join("")+`</tbody></table><div style="font-size:11.5px;color:var(--ink-2);margin-top:9px">Totale abbonamenti ≈ <b>${fmtEUR(totSub)}/mese</b> · ${fmtEUR(totSub*12)}/anno</div>`;
+  E("dash").style.display="block";
+}
 
 /* ---- collegamento al vault (repo privato via GitHub) ---- */
 const CFG_KEY="bilancio_cfg";
@@ -250,6 +286,7 @@ async function loadFromVault(){
     const obj=JSON.parse(new TextDecoder("utf-8").decode(bytes));
     const p=(obj.periodi&&obj.periodi[0])||obj;
     renderResult({entrate:p.entrate,uscite:p.uscite,risparmio:p.risparmio,categorie:p.categorie,note:(p.note||[]).concat(["Dati dal vault"+(p.etichetta?" · "+p.etichetta:"")])},null);
+    renderDashboard(p);
     setStatus("✓ Caricato dal vault"+(p.etichetta?" ("+p.etichetta+")":""),"ok");
   }catch(e){setStatus("Errore: "+e.message,"err");}
 }
