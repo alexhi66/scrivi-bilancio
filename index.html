@@ -96,6 +96,19 @@
   footer{margin-top:16px;padding-top:14px;border-top:1px solid var(--hair);font-size:11.5px;color:var(--muted);line-height:1.6;}
   table.sub{width:100%;border-collapse:collapse;font-size:12.5px;}
   table.sub td{padding:6px 4px;border-bottom:1px solid var(--hair);}
+  /* Da chiarire */
+  .card.clarify{background:var(--warn-bg);border-color:color-mix(in srgb,var(--warn) 45%,var(--hair));}
+  .clarify .ct h2{color:var(--ink);}
+  .clr-row{display:grid;grid-template-columns:1fr 132px 1fr;gap:8px;align-items:center;padding:9px 0;border-top:1px solid var(--hair);}
+  .clr-row:first-child{border-top:none;}
+  @media(max-width:560px){.clr-row{grid-template-columns:1fr;gap:5px;}}
+  .clr-desc{font-size:12.5px;color:var(--ink-2);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .clr-desc b{color:var(--ink);font-weight:700;}
+  .clr-key,.clr-cat{font-size:12.5px;padding:7px 9px;border:1px solid var(--hair-2);border-radius:7px;background:var(--surface);color:var(--ink);width:100%;}
+  .clarActions{display:flex;gap:8px;margin-top:13px;flex-wrap:wrap;align-items:center;}
+  .clarActions button{font-size:13px;padding:8px 14px;border-radius:8px;border:none;cursor:pointer;background:var(--accent);color:#fff;font-weight:600;}
+  .clarActions .lnk{background:transparent;color:var(--ink-2);border:1px solid var(--hair-2);}
+  .clarNote{font-size:11.5px;color:var(--ink-2);}
 </style>
 </head>
 <body>
@@ -133,6 +146,17 @@
       <div class="card kpi inn c4 k4"><span class="lab">Entrate</span><span class="val num" id="kIn">—</span><span class="foot" id="kInFoot"></span></div>
       <div class="card kpi o c4 k4"><span class="lab">Uscite</span><span class="val num" id="kOut">—</span><span class="foot">6 fonti riconciliate</span></div>
       <div class="card kpi sav c4 k4" id="kSavCard"><span class="lab">Risparmio</span><span class="val num" id="kSav">—</span><span class="foot" id="kSavFoot"></span></div>
+
+      <!-- DA CHIARIRE -->
+      <div class="card c12 clarify" id="clarifyCard" style="display:none">
+        <div class="ct"><h2>🔍 Da chiarire</h2><span class="sub" id="clarHint"></span></div>
+        <div id="clarList"></div>
+        <div class="clarActions">
+          <button id="clarApply">✓ Applica e memorizza</button>
+          <button id="clarForget" class="lnk">Dimentica regole apprese</button>
+          <span class="clarNote" id="clarSaved"></span>
+        </div>
+      </div>
 
       <!-- CATEGORIE -->
       <div class="card c7">
@@ -214,7 +238,14 @@
     ["Salute",/farmacia|\bstudio dr\b|\bdott\b|ospedale|clinica|dentist|\bmedic|khuen/i],
     ["Tabacchi",/tabacc|monopoli/i],["Prelievi/Contante",/prelievo|\batm\b|bancomat/i],
     ["Commissioni/Banca",/commission|imposta di bollo|\bbolli\b|\bcanone\b|servizio alert|maggiorazione|spese conto|recupero imposta/i]];
-  function categorize(d){for(const[c,re]of RULES)if(re.test(d))return c;return"Altro/Da rivedere";}
+  function categorize(d,userRules){const s=(d||"").toLowerCase();
+    if(userRules)for(const u of userRules){if(u.match&&s.includes(String(u.match).toLowerCase()))return u.cat;}
+    for(const[c,re]of RULES)if(re.test(d))return c;return"Altro/Da rivedere";}
+  // chiave di raggruppamento per le voci non riconosciute: toglie date/numeri lunghi, tiene il "merchant"
+  function cleanDesc(d){return (d||"").toLowerCase()
+    .replace(/\d{2}[\/\-.]\d{2}([\/\-.]\d{2,4})?/g," ").replace(/\b\d{4,}\b/g," ")
+    .replace(/carta\s*\*+\s*\d*/g," ").replace(/[*]+/g," ").replace(/\s+/g," ").trim()
+    .split(" ").slice(0,5).join(" ");}
   function normalize(text,name){const rows=parseCSV(text);if(!rows.length)return null;const fmt=detectFormat(rows[0]);const b=rows.slice(1);
     const o={name,fmt,entrate:0,usciteRows:[],ccAggregati:[],creditoDettaglio:[],totCredito:0};
     if(fmt==="ing_conto"){for(const r of b){const causale=r[4],desc=r[5];if(!causale||!causale.trim())continue;const u=Math.abs(eur(r[2])),e=Math.abs(eur(r[3]));
@@ -224,9 +255,11 @@
     else if(fmt==="revolut"){const H=rows[0].map(x=>x.trim().toLowerCase());const di=H.findIndex(x=>x.includes("description")),ai=H.findIndex(x=>x==="amount");
       for(const r of b){const a=eur(r[ai]);if(a>=0)continue;o.usciteRows.push({desc:r[di]||"",amt:Math.abs(a)});}}
     return o;}
-  function consolidate(files){const norm=files.map(f=>normalize(f.text,f.name)).filter(Boolean);
+  function consolidate(files,userRules){const norm=files.map(f=>normalize(f.text,f.name)).filter(Boolean);
     const hasConto=norm.some(n=>n.fmt==="ing_conto"),creditoFiles=norm.filter(n=>n.fmt==="ing_credito");
-    const cats={};let entrate=0;const notes=[];const add=(d,a)=>{const c=categorize(d);cats[c]=(cats[c]||0)+a;};
+    const cats={};let entrate=0;const notes=[];const unmatched={};
+    const add=(d,a)=>{const c=categorize(d,userRules);cats[c]=(cats[c]||0)+a;
+      if(c==="Altro/Da rivedere"){const k=cleanDesc(d)||"(vuoto)";const u=unmatched[k]||(unmatched[k]={sample:(d||"").trim(),amt:0,n:0});u.amt+=a;u.n++;}};
     for(const n of norm){
       if(n.fmt==="ing_conto"){entrate+=n.entrate;for(const row of n.usciteRows)add(row.desc,row.amt);
         for(const agg of n.ccAggregati){const m=creditoFiles.find(cf=>Math.abs(cf.totCredito-agg)<0.5&&!cf._used);
@@ -238,7 +271,8 @@
       else notes.push(n.name+": formato non riconosciuto → saltato.");}
     const uscite=Object.values(cats).reduce((a,b)=>a+b,0);
     const sorted=Object.entries(cats).map(([k,v])=>({cat:k,amt:+v.toFixed(2)})).sort((a,b)=>b.amt-a.amt);
-    return{entrate:+entrate.toFixed(2),uscite:+uscite.toFixed(2),risparmio:+(entrate-uscite).toFixed(2),categorie:sorted,note:notes,formati:norm.map(n=>({name:n.name,fmt:n.fmt}))};}
+    const daChiarire=Object.entries(unmatched).map(([k,v])=>({key:k,sample:v.sample,amt:+v.amt.toFixed(2),n:v.n})).sort((a,b)=>b.amt-a.amt);
+    return{entrate:+entrate.toFixed(2),uscite:+uscite.toFixed(2),risparmio:+(entrate-uscite).toFixed(2),categorie:sorted,daChiarire,note:notes,formati:norm.map(n=>({name:n.name,fmt:n.fmt}))};}
   root.BilancioEngine={consolidate};
 })(window);
 
@@ -249,6 +283,12 @@ const FMT_LABEL={ing_conto:"conto ING",ing_credito:"carta credito ING",ing_debit
 const esc=(s)=>String(s==null?"":s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const isNd=(n)=>/dettaglio n\/d|da riconciliare|non categorizz/i.test(n);
 let loaded=[];
+/* categorie offerte quando chiarisci una voce non riconosciuta */
+const CATS=["Casa/Affitti","Matteo — Affitto","Matteo — Altre spese","Utenze","Finanziamenti","Tasse/PA","AI/Tech","Abbonamenti/Streaming","Alimentari/Spesa","Carburante","Ristoranti/Bar/Svago","Shopping","Salute","Tabacchi","Prelievi/Contante","Viaggi/Vacanze","Commissioni/Banca"];
+/* regole che TU insegni: {match, cat}. Restano SOLO su questo dispositivo (dati personali). */
+const RULES_KEY="bilancio_rules";
+const getRules=()=>{try{return JSON.parse(localStorage.getItem(RULES_KEY)||"[]");}catch(e){return [];}};
+const setRules=(r)=>{try{localStorage.setItem(RULES_KEY,JSON.stringify(r));}catch(e){}};
 
 function showDash(on){document.querySelectorAll(".dashcard").forEach(el=>el.style.display=on?"":"none");}
 
@@ -287,7 +327,32 @@ function renderDashboard(p){
   E("dSub").innerHTML=`<table class="sub"><tbody>`+subs.map(s=>`<tr><td>${esc(s.servizio)} <span style="color:var(--muted);font-size:11px">${esc(s.categoria)}</span></td><td class="num" style="text-align:right">${fmtEUR(s.mese)}/m</td><td class="num" style="text-align:right;color:var(--muted)">${fmtEUR((s.mese||0)*12)}/a</td></tr>`).join("")+`</tbody></table><div style="font-size:11.5px;color:var(--ink-2);margin-top:9px">Totale ≈ <b>${fmtEUR(tot)}/mese</b> · ${fmtEUR(tot*12)}/anno</div>`;
   showDash(true);
 }
-function render(){const res=window.BilancioEngine.consolidate(loaded.map(f=>({name:f.name,text:f.text})));renderResult(res,res.formati);showDash(false);E("out").scrollIntoView({behavior:"smooth",block:"start"});}
+function catOptions(){return `<option value="">— scegli categoria —</option>`+CATS.map(c=>`<option>${esc(c)}</option>`).join("")+`<option value="__new__">➕ Nuova categoria…</option>`;}
+function renderClarify(list){const card=E("clarifyCard");list=list||[];const rules=getRules();
+  E("clarSaved").textContent=rules.length?("🧠 "+rules.length+" regole apprese"):"";
+  if(!list.length){card.style.display="none";return;}
+  const tot=list.reduce((a,b)=>a+b.amt,0);
+  E("clarHint").textContent=list.length+" voci · "+fmtEUR(tot)+" — assegna la categoria, la ricordo io";
+  E("clarList").innerHTML=list.map((it,i)=>`<div class="clr-row" data-i="${i}">
+    <span class="clr-desc" title="${esc(it.sample)}"><b>${fmtEUR(it.amt)}</b> · ${esc(it.sample)}${it.n>1?' <span style="color:var(--muted)">×'+it.n+'</span>':''}</span>
+    <input class="clr-key" value="${esc(it.key)}" title="parola chiave che riconosce questa spesa">
+    <select class="clr-cat">${catOptions()}</select></div>`).join("");
+  card.style.display="";
+  E("clarList").querySelectorAll(".clr-cat").forEach(sel=>sel.addEventListener("change",()=>{
+    if(sel.value==="__new__"){const nc=prompt("Nome della nuova categoria:");
+      if(nc&&nc.trim()){const o=document.createElement("option");o.textContent=nc.trim();o.selected=true;sel.insertBefore(o,sel.lastElementChild);}
+      else sel.value="";}
+  }));
+}
+function render(){const res=window.BilancioEngine.consolidate(loaded.map(f=>({name:f.name,text:f.text})),getRules());renderResult(res,res.formati);renderClarify(res.daChiarire);showDash(false);E("out").scrollIntoView({behavior:"smooth",block:"start"});}
+E("clarApply").addEventListener("click",()=>{
+  let rules=getRules(),added=0;
+  [...E("clarList").querySelectorAll(".clr-row")].forEach(row=>{
+    const key=row.querySelector(".clr-key").value.trim();const cat=row.querySelector(".clr-cat").value;
+    if(key&&cat&&cat!=="__new__"){rules=rules.filter(r=>String(r.match).toLowerCase()!==key.toLowerCase());rules.push({match:key,cat});added++;}});
+  if(added){setRules(rules);render();}
+});
+E("clarForget").addEventListener("click",()=>{if(confirm("Dimentico tutte le regole che ti ho imparato?")){setRules([]);render();}});
 
 const drop=E("drop"),fileInput=E("file");
 ["dragenter","dragover"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add("over");}));
@@ -314,7 +379,7 @@ async function loadFromVault(){const cfg=getCfg();if(!cfg)return;setStatus("Cari
     const data=await r.json();const bin=atob((data.content||"").replace(/\s/g,""));const bytes=Uint8Array.from(bin,c=>c.charCodeAt(0));
     const obj=JSON.parse(new TextDecoder("utf-8").decode(bytes));const p=(obj.periodi&&obj.periodi[0])||obj;
     renderResult({entrate:p.entrate,uscite:p.uscite,risparmio:p.risparmio,categorie:p.categorie,note:(p.note||[]).concat(["Dati dal vault"+(p.etichetta?" · "+p.etichetta:"")])},null);
-    renderDashboard(p);E("out").scrollIntoView({behavior:"smooth",block:"start"});
+    renderDashboard(p);E("clarifyCard").style.display="none";E("out").scrollIntoView({behavior:"smooth",block:"start"});
     setStatus("✓ Caricato dal vault"+(p.etichetta?" ("+p.etichetta+")":""),"ok");
   }catch(e){setStatus("Errore: "+e.message,"err");}}
 (function init(){const cfg=getCfg();if(cfg){E("cfgOwner").value=cfg.owner||"";E("cfgRepo").value=cfg.repo||"";E("cfgPath").value=cfg.path||"costi-dati.json";E("cfgToken").value=cfg.token||"";setStatus("Collegato ("+cfg.owner+"/"+cfg.repo+")","ok");loadFromVault();}})();
