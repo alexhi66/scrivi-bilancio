@@ -183,6 +183,12 @@
         <div id="dPatr"></div>
       </div>
 
+      <!-- SOSTENIBILITÀ -->
+      <div class="card c7 dashcard" style="display:none">
+        <div class="ct"><h2>Sostenibilità</h2><span class="sub">entrate → uscite · pareggio a 45°</span></div>
+        <div id="dSost"></div>
+      </div>
+
       <!-- NATURA -->
       <div class="card c6 dashcard" style="display:none">
         <div class="ct"><h2>Per natura</h2><span class="sub">fisse · abbonamenti · consumo</span></div>
@@ -337,7 +343,53 @@ function renderDashboard(p){
   const sw=p.servizi_web||{};E("dWeb").innerHTML=barsRow(Object.keys(sw).map(k=>({label:k,val:sw[k]})));
   const subs=(p.abbonamenti||[]).slice().sort((a,b)=>b.mese-a.mese),tot=subs.reduce((a,b)=>a+(b.mese||0),0);
   E("dSub").innerHTML=`<table class="sub"><tbody>`+subs.map(s=>`<tr><td>${esc(s.servizio)} <span style="color:var(--muted);font-size:11px">${esc(s.categoria)}</span></td><td class="num" style="text-align:right">${fmtEUR(s.mese)}/m</td><td class="num" style="text-align:right;color:var(--muted)">${fmtEUR((s.mese||0)*12)}/a</td></tr>`).join("")+`</tbody></table><div style="font-size:11.5px;color:var(--ink-2);margin-top:9px">Totale ≈ <b>${fmtEUR(tot)}/mese</b> · ${fmtEUR(tot*12)}/anno</div>`;
+  renderSost(p);
   showDash(true);
+}
+/* Diagramma di sostenibilità: piano di fase entrate→uscite + gauge del tasso di risparmio */
+function renderSost(p){const host=E("dSost");if(!host)return;
+  const En=+p.entrate||0,Us=+p.uscite||0,S=En-Us,r=En>0?S/En:0;
+  const MAX=Math.max(2000,Math.ceil(Math.max(En,Us,1)*1.2/2000)*2000);
+  const L=44,R=12,T=12,B=40,VW=340,VH=340,W=VW-L-R,H=VH-T-B;
+  const sx=e=>+(L+(e/MAX)*W).toFixed(1),sy=u=>+(T+H-(u/MAX)*H).toFixed(1);
+  const P=(e,u)=>sx(e)+","+sy(u);
+  const tri=(a,b,c,f,o)=>`<polygon points="${P(a[0],a[1])} ${P(b[0],b[1])} ${P(c[0],c[1])}" fill="${f}" fill-opacity="${o}"/>`;
+  let g="";
+  g+=tri([0,0],[0,MAX],[MAX,MAX],"var(--crit)",.10);
+  g+=tri([0,0],[MAX,MAX],[MAX,.9*MAX],"var(--warn)",.14);
+  g+=tri([0,0],[MAX,.9*MAX],[MAX,.8*MAX],"var(--good)",.12);
+  g+=tri([0,0],[MAX,.8*MAX],[MAX,0],"var(--good)",.22);
+  for(let v=2000;v<=MAX;v+=2000){
+    g+=`<line x1="${sx(v)}" y1="${T}" x2="${sx(v)}" y2="${T+H}" stroke="var(--hair)" stroke-width="1"/>`;
+    g+=`<line x1="${L}" y1="${sy(v)}" x2="${L+W}" y2="${sy(v)}" stroke="var(--hair)" stroke-width="1"/>`;
+    g+=`<text x="${sx(v)}" y="${T+H+14}" fill="var(--muted)" font-size="9" text-anchor="middle">${v/1000}k</text>`;
+    g+=`<text x="${L-6}" y="${sy(v)+3}" fill="var(--muted)" font-size="9" text-anchor="end">${v/1000}k</text>`;}
+  [.9,.8].forEach(k=>{g+=`<line x1="${sx(0)}" y1="${sy(0)}" x2="${sx(MAX)}" y2="${sy(k*MAX)}" stroke="var(--good)" stroke-width="1" stroke-dasharray="3 4" opacity=".5"/>`;});
+  g+=`<line x1="${sx(0)}" y1="${sy(0)}" x2="${sx(MAX)}" y2="${sy(MAX)}" stroke="var(--accent)" stroke-width="2"/>`;
+  g+=`<text x="${sx(MAX)-4}" y="${sy(MAX)+14}" fill="var(--accent)" font-size="9.5" text-anchor="end" font-weight="600">pareggio</text>`;
+  g+=`<line x1="${L}" y1="${T}" x2="${L}" y2="${T+H}" stroke="var(--hair-2)" stroke-width="1.2"/>`;
+  g+=`<line x1="${L}" y1="${T+H}" x2="${L+W}" y2="${T+H}" stroke="var(--hair-2)" stroke-width="1.2"/>`;
+  g+=`<text x="${L+W}" y="${T+H+30}" fill="var(--ink-2)" font-size="10" text-anchor="end" font-weight="600">Entrate →</text>`;
+  g+=`<text x="13" y="${T+H/2}" fill="var(--ink-2)" font-size="10" font-weight="600" text-anchor="middle" transform="rotate(-90 13 ${T+H/2})">Uscite →</text>`;
+  g+=`<circle cx="${sx(En)}" cy="${sy(Us)}" r="9" fill="var(--accent)" opacity=".16"/>`;
+  g+=`<circle cx="${sx(En)}" cy="${sy(Us)}" r="5.5" fill="var(--accent)" stroke="var(--surface)" stroke-width="1.6"/>`;
+  const plane=`<svg viewBox="0 0 ${VW} ${VH}" width="100%" style="max-width:360px;display:block;margin:0 auto">${g}</svg>`;
+  const Z=r<0?["Insostenibile","var(--crit)"]:r<.10?["Fragile","var(--warn)"]:r<.20?["Sano","var(--good)"]:["Robusto","var(--good)"];
+  const lo=-.2,hi=.4,gL=8,gW=324,gy=8,gh=13,gx=v=>+(gL+((Math.max(lo,Math.min(hi,v))-lo)/(hi-lo))*gW).toFixed(1);
+  let gg="";
+  gg+=`<rect x="${gx(-.2)}" y="${gy}" width="${(gx(0)-gx(-.2)).toFixed(1)}" height="${gh}" fill="var(--crit)" opacity=".85" rx="2"/>`;
+  gg+=`<rect x="${gx(0)}" y="${gy}" width="${(gx(.1)-gx(0)).toFixed(1)}" height="${gh}" fill="var(--warn)" opacity=".85"/>`;
+  gg+=`<rect x="${gx(.1)}" y="${gy}" width="${(gx(.2)-gx(.1)).toFixed(1)}" height="${gh}" fill="var(--good)" opacity=".6"/>`;
+  gg+=`<rect x="${gx(.2)}" y="${gy}" width="${(gx(.4)-gx(.2)).toFixed(1)}" height="${gh}" fill="var(--good)" rx="2"/>`;
+  gg+=`<line x1="${gx(0)}" y1="${gy-3}" x2="${gx(0)}" y2="${gy+gh+3}" stroke="var(--ink)" stroke-width="1"/>`;
+  gg+=`<rect x="${(gx(r)-1.5).toFixed(1)}" y="${gy-2}" width="3" height="${gh+4}" fill="var(--ink)" rx="1.5"/>`;
+  gg+=`<text x="${gx(0)}" y="${gy+gh+15}" fill="var(--muted)" font-size="9" text-anchor="middle">0%</text>`;
+  const gauge=`<svg viewBox="0 0 340 42" width="100%" style="margin-top:4px">${gg}</svg>`;
+  const rTxt=(r*100).toLocaleString("it-IT",{maximumFractionDigits:1})+"%";
+  const verdict=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:13px;flex-wrap:wrap">
+    <span style="width:10px;height:10px;border-radius:50%;background:${Z[1]};flex:0 0 auto"></span><b>${esc(Z[0])}</b>
+    <span style="color:var(--ink-2)">risparmio ${(S>=0?"+":"−")+fmtEUR(Math.abs(S))} · tasso ${rTxt}</span></div>`;
+  host.innerHTML=verdict+plane+gauge;
 }
 function catOptions(){return `<option value="">— scegli categoria —</option>`+CATS.map(c=>`<option>${esc(c)}</option>`).join("")+`<option value="__new__">➕ Nuova categoria…</option>`;}
 function renderClarify(list){const card=E("clarifyCard");list=list||[];const rules=getRules();
