@@ -241,7 +241,8 @@
     if(H[0]==="DATA OPERAZIONE"&&j.includes("IMPORTO IN EURO")&&!j.includes("DATA REGISTRAZIONE"))return"ing_debito";
     if(j.includes("STARTED DATE")||(j.includes("TYPE")&&j.includes("AMOUNT")))return"revolut";
     return"unknown";}
-  const RULES=[["Viaggi/Vacanze",/airbnb|booking\.com|\bbooking\b|expedia|ryanair|easyjet|\bhotel\b|ostello|resort/i],
+  const RULES=[["↔ Giroconto (conti propri)",/giroconto|conto proprio|bonifico.*revolut|revolut.*ricarica|ricarica revolut/i],
+    ["Viaggi/Vacanze",/airbnb|booking\.com|\bbooking\b|expedia|ryanair|easyjet|\bhotel\b|ostello|resort/i],
     ["Casa/Affitti",/locazione|affitto|\brent\b|condominio/i],["Finanziamenti",/cofidis|findomestic|\bagos\b|\brata\b|prestito|mutuo/i],
     ["Utenze",/\benel\b|\beni gas\b|\ba2a\b|\bhera\b|\biren\b|alperia|\bseab\b|vodafone|\btim\b|iliad|fastweb|\bgas\b|\bacqua\b|rifiuti|\btari\b|telepass/i],
     ["Tasse/PA",/pagopa|pago pa|agenzia delle entrate|\bf24\b|\bspid\b|comune di|\bimu\b|\binps\b/i],
@@ -252,7 +253,7 @@
     ["Ristoranti/Bar/Svago",/ristorant|trattoria|osteria|pizzeria|\bbar\b|\bcaff|pasticc|gelat|\bsushi\b|autogrill|\bpub\b|lido|bagno|ricci|hotel|riviera|konditorei/i],
     ["Shopping",/amazon|\bamzn\b|zalando|\bzara\b|decathlon|\bikea\b|mediaworld|abbigliamento|ramonda/i],
     ["Salute",/farmacia|\bstudio dr\b|\bdott\b|ospedale|clinica|dentist|\bmedic|khuen/i],
-    ["Tabacchi",/tabacc|monopoli/i],["Prelievi/Contante",/prelievo|\batm\b|bancomat/i],
+    ["Tabacchi",/tabacc|monopoli/i],["→ Contante (borsello)",/prelievo|\batm\b|bancomat/i],
     ["Commissioni/Banca",/commission|imposta di bollo|\bbolli\b|\bcanone\b|servizio alert|maggiorazione|spese conto|recupero imposta/i]];
   function categorize(d,userRules){const s=(d||"").toLowerCase();
     if(userRules)for(const u of userRules){if(u.match&&s.includes(String(u.match).toLowerCase()))return u.cat;}
@@ -285,7 +286,8 @@
       else if(n.fmt==="ing_credito"){if(n._used)continue;if(!hasConto)for(const d of n.creditoDettaglio)add(d.desc,d.amt);}
       else if(n.fmt==="revolut"){for(const row of n.usciteRows)add(row.desc,row.amt);notes.push(n.name+": Revolut aggiunto come conto a parte.");}
       else notes.push(n.name+": formato non riconosciuto → saltato.");}
-    const uscite=Object.values(cats).reduce((a,b)=>a+b,0);
+    const NONSPESA=/giroconto|contante \(borsello\)|prelievi\/contante/i;   // travasi/borsello: non sono spese
+    const uscite=Object.entries(cats).reduce((a,[k,v])=>a+(NONSPESA.test(k)?0:v),0);
     const sorted=Object.entries(cats).map(([k,v])=>({cat:k,amt:+v.toFixed(2)})).sort((a,b)=>b.amt-a.amt);
     const daChiarire=Object.entries(unmatched).map(([k,v])=>({key:k,sample:v.sample,amt:+v.amt.toFixed(2),n:v.n})).sort((a,b)=>b.amt-a.amt);
     return{entrate:+entrate.toFixed(2),uscite:+uscite.toFixed(2),risparmio:+(entrate-uscite).toFixed(2),categorie:sorted,daChiarire,note:notes,formati:norm.map(n=>({name:n.name,fmt:n.fmt}))};}
@@ -300,7 +302,9 @@ const esc=(s)=>String(s==null?"":s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt
 const isNd=(n)=>/dettaglio n\/d|da riconciliare|non categorizz/i.test(n);
 let loaded=[];
 /* categorie offerte quando chiarisci una voce non riconosciuta */
-const CATS=["Casa/Affitti","Matteo — Affitto","Matteo — Altre spese","Utenze","Finanziamenti","Tasse/PA","AI/Tech","Abbonamenti/Streaming","Alimentari/Spesa","Carburante","Ristoranti/Bar/Svago","Shopping","Salute","Tabacchi","Prelievi/Contante","Viaggi/Vacanze","Commissioni/Banca"];
+const CATS=["↔ Giroconto (conti propri)","→ Contante (borsello)","Casa/Affitti","Matteo — Affitto","Matteo — Altre spese","Utenze","Finanziamenti","Tasse/PA","AI/Tech","Abbonamenti/Streaming","Alimentari/Spesa","Carburante","Ristoranti/Bar/Svago","Shopping","Salute","Tabacchi","Viaggi/Vacanze","Commissioni/Banca"];
+/* categorie che NON sono spese: escluse dal totale uscite (travasi tra conti propri, ricarica borsello) */
+const isNonSpesa=(n)=>/giroconto|contante \(borsello\)|prelievi\/contante/i.test(n);
 /* regole che TU insegni: {match, cat}. Restano SOLO su questo dispositivo (dati personali). */
 const RULES_KEY="bilancio_rules";
 const getRules=()=>{try{return JSON.parse(localStorage.getItem(RULES_KEY)||"[]");}catch(e){return [];}};
@@ -320,7 +324,8 @@ function showDash(on){document.querySelectorAll(".dashcard").forEach(el=>el.styl
 function renderResult(res,formati){
   E("files").innerHTML=(formati||[]).map(f=>{const ok=f.fmt!=="unknown";return `<span class="fchip"><span class="${ok?'ok':'no'}">${ok?'✓':'!'}</span>${esc(f.name)} <span class="k">${esc(FMT_LABEL[f.fmt]||f.fmt)}</span></span>`;}).join("");
   const all=(res.categorie||[]).map(c=>({cat:c.cat,amt:(c.amt!=null?c.amt:c.importo)}));
-  const cats=all.filter(c=>!isNd(c.cat)),nd=all.filter(c=>isNd(c.cat));
+  const nonsp=all.filter(c=>isNonSpesa(c.cat));
+  const cats=all.filter(c=>!isNd(c.cat)&&!isNonSpesa(c.cat)),nd=all.filter(c=>isNd(c.cat)&&!isNonSpesa(c.cat));
   E("kIn").textContent=fmtEUR(res.entrate);E("kOut").textContent=fmtEUR(res.uscite);
   E("kSav").textContent=(res.risparmio>=0?"+":"−")+fmtEUR(Math.abs(res.risparmio));
   E("kSavCard").classList.toggle("pos",res.risparmio>=0);
@@ -330,7 +335,10 @@ function renderResult(res,formati){
   E("uscHint").textContent=fmtEUR(res.uscite)+" · "+cats.length+" categorie";
   E("bars").innerHTML=cats.map(c=>{const p=Math.round(100*c.amt/(res.uscite||1)),w=Math.max(2,100*c.amt/max);
     return `<div class="bar"><span class="cat">${esc(c.cat)}</span><div class="track"><div class="fill" style="width:${w}%"></div></div><span class="v num">${fmtEUR(c.amt)} <small>${p}%</small></span></div>`;}).join("");
-  E("reconBox").innerHTML=nd.length?`<div class="recon">↺ <b style="color:var(--ink-2)">Da riconciliare</b> (non è spesa in più): ${nd.map(c=>esc(c.cat)+" "+fmtEUR(c.amt)).join(" · ")}</div>`:"";
+  let rec="";
+  if(nd.length)rec+=`<div class="recon">↺ <b style="color:var(--ink-2)">Da riconciliare</b> (non è spesa in più): ${nd.map(c=>esc(c.cat)+" "+fmtEUR(c.amt)).join(" · ")}</div>`;
+  if(nonsp.length)rec+=`<div class="recon">⇄ <b style="color:var(--ink-2)">Esclusi · non spese</b> (travasi tra conti tuoi, contante nel borsello): ${nonsp.map(c=>esc(c.cat)+" "+fmtEUR(c.amt)).join(" · ")}</div>`;
+  E("reconBox").innerHTML=rec;
   E("notes").innerHTML=((res.note&&res.note.length)?res.note:["—"]).map(n=>`<li>${esc(n)}</li>`).join("");
   E("out").style.display="block";
 }
