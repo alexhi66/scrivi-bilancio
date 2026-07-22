@@ -136,6 +136,10 @@
   .dispbox input{width:100%;margin-top:7px;font-size:19px;font-weight:700;letter-spacing:-.01em;padding:7px 9px;border:1px solid var(--hair-2);border-radius:8px;background:var(--plane);color:var(--ink);}
   .disptot{margin-top:13px;font-size:13.5px;color:var(--ink-2);}
   .disptot b{font-size:20px;color:var(--ink);}
+  .disdrow{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 0;border-top:1px dashed var(--hair);font-size:13px;}
+  .disd-x{background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:2px 7px;border-radius:6px;line-height:1;}
+  .disd-x:hover{color:var(--crit);background:var(--surface-2);}
+  .disd-x:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
   /* NAV a sezioni — pannello di controllo */
   .appnav{display:flex;gap:4px;background:var(--surface);border:1px solid var(--hair);border-radius:14px;padding:5px;margin:16px 0;position:sticky;top:8px;z-index:30;box-shadow:var(--elev);}
   .navbtn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:50px;padding:8px 4px;border:none;background:none;color:var(--ink-2);border-radius:10px;cursor:pointer;font:inherit;font-weight:600;position:relative;transition:background .12s,color .12s;}
@@ -384,6 +388,11 @@ const allCats=()=>CATS.concat(getCustomCats().filter(c=>!CATS.includes(c)));
 const SALDI_KEY="bilancio_saldi";
 const getSaldi=()=>{try{return JSON.parse(localStorage.getItem(SALDI_KEY)||"{}");}catch(e){return {};}};
 const setSaldi=(o)=>{try{localStorage.setItem(SALDI_KEY,JSON.stringify(o));}catch(e){}};
+/* disdette decise nel Consulente → memorizzate e verificate da Jasper sull'estratto */
+const DISD_KEY="bilancio_disdette";
+const getDisdette=()=>{try{return JSON.parse(localStorage.getItem(DISD_KEY)||"[]");}catch(e){return [];}};
+const setDisdette=(a)=>{try{localStorage.setItem(DISD_KEY,JSON.stringify(a));}catch(e){}};
+const nowISO=()=>{try{return new Date().toISOString().slice(0,10);}catch(e){return "";}};
 /* suggerisce la categoria da una regola già insegnata (così i "simili" ci finiscono) */
 const suggestCat=(m)=>{const s=((m.merchant||"")+" "+(m.nota||"")+" "+(m.strumento||"")).toLowerCase();for(const r of getRules()){if(r.match&&s.includes(String(r.match).toLowerCase()))return r.cat;}return "";};
 function addCustomCatEverywhere(name){addCustomCat(name);document.querySelectorAll("select.clr-cat").forEach(sel=>{if(![...sel.options].some(o=>o.textContent===name)){const o=document.createElement("option");o.textContent=name;sel.insertBefore(o,sel.lastElementChild);}});}
@@ -465,13 +474,17 @@ function renderDashboard(p){
 }
 /* Disponibilità: saldi delle riserve (ING, Revolut, contante) — Revolut e borsello si alimentano da giroconti ING */
 function renderDisponibilita(p){const host=E("dDisp");if(!host)return;
-  const s=getSaldi();
+  const s=getSaldi();const prelevato=+p.borsello||0;
   const rows=[["ing","Conto ING","🏦"],["revolut","Revolut ••3351","💳"],["borsello","Contante (borsello)","👛"]];
   const val=(k)=>{const v=(k==="borsello"&&s.borsello==null)?(p.borsello||""):s[k];return v==null?"":v;};
   host.innerHTML=`<div class="disp">`+rows.map(([k,lab,ic])=>`<div class="dispbox"><div class="dl">${ic} ${esc(lab)}</div><input type="number" class="disp-in" data-k="${k}" value="${val(k)}" step="0.01" inputmode="decimal" placeholder="0,00"></div>`).join("")+`</div>
     <div class="disptot">Totale disponibile: <b id="dispTot" class="num">—</b></div>
+    <div id="dispRecon"></div>
     <div style="font-size:11px;color:var(--muted);margin-top:8px">Revolut e il contante sono salvadanai: si <b>caricano</b> con giroconti dal conto ING e si <b>svuotano</b> spendendo. Aggiorna un saldo quando cambia — resta sincronizzato su ogni dispositivo.</div>`;
-  const upd=()=>{let t=0;host.querySelectorAll(".disp-in").forEach(i=>{t+=parseFloat(i.value)||0;});E("dispTot").textContent=fmtEUR(t);};
+  const upd=()=>{let t=0,bors=0;host.querySelectorAll(".disp-in").forEach(i=>{const v=parseFloat(i.value)||0;t+=v;if(i.dataset.k==="borsello")bors=v;});
+    E("dispTot").textContent=fmtEUR(t);
+    const speso=Math.max(0,+(prelevato-bors).toFixed(2));
+    E("dispRecon").innerHTML=(prelevato>0&&speso>0)?`<div class="recon" style="margin-top:12px">🧮 <b style="color:var(--ink-2)">Riconciliazione borsello</b>: prelevato ${fmtEUR(prelevato)} − in tasca ${fmtEUR(bors)} = <b>${fmtEUR(speso)} spesi in contanti</b>, ancora da assegnare (comunicali a Jasper per smistarli nelle categorie).</div>`:"";};
   host.querySelectorAll(".disp-in").forEach(i=>{
     i.addEventListener("input",()=>{const o=getSaldi();o[i.dataset.k]=parseFloat(i.value)||0;setSaldi(o);upd();});
     i.addEventListener("change",()=>saveVaultConfig());});
@@ -493,12 +506,29 @@ function renderConsulente(p){const host=E("dPlan");if(!host)return;
     <div class="plan-ctrl"><label for="planBase">Risparmio mensile medio</label><input type="number" id="planBase" value="${base}" min="0" step="10"><span style="color:var(--muted)">€/mese</span>
       <span class="orizz">Orizzonte <button class="obtn on" data-n="12">12m</button><button class="obtn" data-n="24">24m</button><button class="obtn" data-n="36">36m</button></span></div>
     <div id="planOut" class="plan-proj"></div>
-    <div style="font-size:11px;color:var(--muted);margin-top:9px">Base = risparmio del periodo al netto del contante nel borsello; correggila col tuo valore medio reale.</div>`;
+    <div style="font-size:11px;color:var(--muted);margin-top:9px">Base = risparmio del periodo al netto del contante nel borsello; correggila col tuo valore medio reale.</div>
+    <div class="divl"></div>
+    <div class="plan-ctrl"><button class="obtn" id="planMark" style="background:var(--accent);color:#fff;border-color:var(--accent)">🔖 Segna disdette decise</button><span class="clarNote" id="planMarkMsg">Spunta i servizi sopra, poi memorizzali qui: Jasper verifica sull'estratto che spariscano.</span></div>
+    <div id="disdList"></div>`;
   host.innerHTML=html;
   host.querySelectorAll(".plan-chk").forEach(c=>c.addEventListener("change",updatePlan));
   E("planBase").addEventListener("input",updatePlan);
-  host.querySelectorAll(".obtn").forEach(btn=>btn.addEventListener("click",()=>{PLAN.n=+btn.dataset.n;host.querySelectorAll(".obtn").forEach(x=>x.classList.toggle("on",x===btn));updatePlan();}));
-  updatePlan();
+  host.querySelectorAll(".obtn").forEach(btn=>btn.addEventListener("click",()=>{if(btn.id==="planMark")return;PLAN.n=+btn.dataset.n;host.querySelectorAll(".obtn[data-n]").forEach(x=>x.classList.toggle("on",x===btn));updatePlan();}));
+  E("planMark").addEventListener("click",()=>{
+    const chosen=[...document.querySelectorAll(".plan-chk")].filter(c=>c.checked).map(c=>PLAN.subs[+c.dataset.i]).filter(Boolean);
+    if(!chosen.length){E("planMarkMsg").textContent="Prima spunta i servizi da disdire, poi premi qui.";return;}
+    const d=getDisdette();let added=0;
+    chosen.forEach(s=>{if(!d.some(x=>x.servizio===s.servizio)){d.push({servizio:s.servizio,importo:s.mese,categoria:s.categoria,data:nowISO(),stato:"da_verificare"});added++;}});
+    setDisdette(d);saveVaultConfig();renderDisdette();
+    E("planMarkMsg").textContent=added?("✓ "+added+" segnata/e — Jasper verificherà"):"Già in verifica.";
+  });
+  renderDisdette();
+}
+function renderDisdette(){const host=E("disdList");if(!host)return;const d=getDisdette();
+  if(!d.length){host.innerHTML="";return;}
+  host.innerHTML=`<div style="font-size:12px;color:var(--ink);font-weight:600;margin-top:12px">Disdette in verifica</div>`+
+    d.map(x=>`<div class="disdrow"><span>${esc(x.servizio)} <span style="color:var(--muted);font-size:11px">${fmtEUR(x.importo||0)}/m · dal ${esc(x.data||"—")} · ${x.stato==="confermata"?"✓ confermata":"⏳ in verifica"}</span></span><button class="disd-x" data-s="${esc(x.servizio)}" title="Annulla decisione" aria-label="Annulla">✕</button></div>`).join("");
+  host.querySelectorAll(".disd-x").forEach(b=>b.addEventListener("click",()=>{setDisdette(getDisdette().filter(x=>x.servizio!==b.dataset.s));saveVaultConfig();renderDisdette();}));
 }
 function updatePlan(){
   const cut=[...document.querySelectorAll(".plan-chk")].reduce((a,c)=>a+(c.checked?(PLAN.subs[+c.dataset.i].mese||0):0),0);
@@ -674,6 +704,7 @@ function mergeConfig(remote){
   getRules().forEach(x=>{if(x&&x.match)map[String(x.match).toLowerCase()]=x;});
   setRules(Object.values(map));
   if(remote.saldi&&typeof remote.saldi==="object")setSaldi(remote.saldi);
+  if(Array.isArray(remote.disdette)){const dm={};remote.disdette.forEach(d=>{if(d&&d.servizio)dm[d.servizio]=d;});getDisdette().forEach(d=>{if(d&&d.servizio)dm[d.servizio]=d;});setDisdette(Object.values(dm));}
 }
 const cfgHeaders=(cfg)=>({Authorization:"Bearer "+cfg.token,Accept:"application/vnd.github+json"});
 async function loadVaultConfig(cfg){try{
@@ -682,7 +713,7 @@ async function loadVaultConfig(cfg){try{
   const data=await r.json();cfgSha=data.sha;mergeConfig(JSON.parse(b64ToUtf8(data.content)||"{}"));
 }catch(e){}}
 async function saveVaultConfig(cfgArg){const cfg=cfgArg||getCfg();if(!cfg||!cfg.token)return;
-  const build=()=>utf8ToB64(JSON.stringify({categorie:getCustomCats(),regole:getRules(),saldi:getSaldi()},null,2));
+  const build=()=>utf8ToB64(JSON.stringify({categorie:getCustomCats(),regole:getRules(),saldi:getSaldi(),disdette:getDisdette()},null,2));
   try{const body={message:"App: sync categorie e regole (multi-dispositivo)",content:build()};if(cfgSha)body.sha=cfgSha;
     let r=await fetch(ghUrl(cfg,"config-app.json"),{method:"PUT",headers:cfgHeaders(cfg),body:JSON.stringify(body)});
     if(r.status===409){const s=await fetch(ghUrl(cfg,"config-app.json"),{headers:cfgHeaders(cfg)});
