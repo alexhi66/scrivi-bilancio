@@ -136,6 +136,24 @@
   .dispbox input{width:100%;margin-top:7px;font-size:19px;font-weight:700;letter-spacing:-.01em;padding:7px 9px;border:1px solid var(--hair-2);border-radius:8px;background:var(--plane);color:var(--ink);}
   .disptot{margin-top:13px;font-size:13.5px;color:var(--ink-2);}
   .disptot b{font-size:20px;color:var(--ink);}
+  /* NAV a sezioni — pannello di controllo */
+  .appnav{display:flex;gap:4px;background:var(--surface);border:1px solid var(--hair);border-radius:14px;padding:5px;margin:16px 0;position:sticky;top:8px;z-index:30;box-shadow:var(--elev);}
+  .navbtn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:50px;padding:8px 4px;border:none;background:none;color:var(--ink-2);border-radius:10px;cursor:pointer;font:inherit;font-weight:600;position:relative;transition:background .12s,color .12s;}
+  .navbtn .ni{font-size:18px;line-height:1;}
+  .navbtn .nl{font-size:11px;white-space:nowrap;}
+  .navbtn[aria-current="page"]{background:var(--accent-soft);color:var(--accent);}
+  .navbtn:hover{color:var(--accent);}
+  .navbtn:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+  .nbadge{position:absolute;top:3px;left:calc(50% + 6px);min-width:17px;height:17px;padding:0 4px;background:var(--crit);color:#fff;border-radius:9px;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;line-height:1;}
+  .sec[hidden]{display:none;}
+  .sec{animation:secin .18s ease;}
+  @keyframes secin{from{opacity:.4}to{opacity:1}}
+  @media(prefers-reduced-motion:reduce){.sec{animation:none;}}
+  @media(max-width:600px){
+    .appnav{position:fixed;left:0;right:0;bottom:0;top:auto;margin:0;border-radius:16px 16px 0 0;border-left:none;border-right:none;border-bottom:none;padding:4px 4px calc(4px + env(safe-area-inset-bottom));z-index:60;}
+    .navbtn .nl{font-size:10px;}
+    .wrap{padding-bottom:78px;}
+  }
 </style>
 </head>
 <body>
@@ -168,97 +186,104 @@
   <div class="hint2">Formati automatici: <b>ING conto</b>, <b>ING carta credito</b>, <b>ING carta debito</b>, <b>Revolut</b> (esporta in <code>CSV</code>). Il PDF non è supportato.</div>
   <div class="files" id="files"></div>
 
+  <nav id="appnav" class="appnav" role="tablist" aria-label="Sezioni" hidden>
+    <button class="navbtn" role="tab" data-sec="panoramica" aria-current="page"><span class="ni" aria-hidden="true">📊</span><span class="nl">Panoramica</span></button>
+    <button class="navbtn" role="tab" data-sec="spese"><span class="ni" aria-hidden="true">💳</span><span class="nl">Spese</span></button>
+    <button class="navbtn" role="tab" data-sec="disp"><span class="ni" aria-hidden="true">🏦</span><span class="nl">Saldi</span></button>
+    <button class="navbtn" role="tab" data-sec="ricorrenti"><span class="ni" aria-hidden="true">🔁</span><span class="nl">Ricorrenti</span></button>
+    <button class="navbtn" role="tab" data-sec="sistemare"><span class="ni" aria-hidden="true">✅</span><span class="nl">Da fare</span><span class="nbadge" id="navBadge" hidden></span></button>
+  </nav>
+
   <div id="out">
-    <div class="grid">
-      <!-- KPI -->
-      <div class="card kpi inn c4 k4"><span class="lab">Entrate</span><span class="val num" id="kIn">—</span><span class="foot" id="kInFoot"></span></div>
-      <div class="card kpi o c4 k4"><span class="lab">Uscite</span><span class="val num" id="kOut">—</span><span class="foot">6 fonti riconciliate</span></div>
-      <div class="card kpi sav c4 k4" id="kSavCard"><span class="lab">Risparmio</span><span class="val num" id="kSav">—</span><span class="foot" id="kSavFoot"></span></div>
-
-      <!-- DA CHIARIRE -->
-      <div class="card c12 clarify" id="clarifyCard" style="display:none">
-        <div class="ct"><h2>🔍 Da chiarire</h2><span class="sub" id="clarHint"></span></div>
-        <div id="clarList"></div>
-        <div class="clarActions">
-          <button id="clarApply">✓ Applica e memorizza</button>
-          <button id="clarForget" class="lnk">Dimentica regole apprese</button>
-          <span class="clarNote" id="clarSaved"></span>
+    <!-- PANORAMICA -->
+    <section class="sec" role="tabpanel" data-sec="panoramica" aria-label="Panoramica">
+      <div class="grid">
+        <div class="card kpi inn c4 k4"><span class="lab">Entrate</span><span class="val num" id="kIn">—</span><span class="foot" id="kInFoot"></span></div>
+        <div class="card kpi o c4 k4"><span class="lab">Uscite</span><span class="val num" id="kOut">—</span><span class="foot">6 fonti riconciliate</span></div>
+        <div class="card kpi sav c4 k4" id="kSavCard"><span class="lab">Risparmio</span><span class="val num" id="kSav">—</span><span class="foot" id="kSavFoot"></span></div>
+        <div class="card c5 dashcard" style="display:none">
+          <div class="ct"><h2>Bilancio &amp; patrimonio</h2></div>
+          <div class="bars" id="dWfall"></div><div class="divl"></div><div id="dPatr"></div>
+        </div>
+        <div class="card c7 dashcard" style="display:none">
+          <div class="ct"><h2>Sostenibilità</h2><span class="sub">entrate → uscite · pareggio a 45°</span></div>
+          <div id="dSost"></div>
         </div>
       </div>
+    </section>
 
-      <!-- DA CHIARIRE · DA JASPER (vault) -->
-      <div class="card c12 clarify" id="jasperCard" style="display:none">
-        <div class="ct"><h2>📥 Da chiarire — segnalati da Jasper</h2><span class="sub" id="jasperHint"></span></div>
-        <div id="jasperList"></div>
-        <div class="clarActions">
-          <button id="jasperSave">✓ Salva nel vault</button>
-          <span class="clarNote" id="jasperMsg"></span>
+    <!-- SPESE -->
+    <section class="sec" role="tabpanel" data-sec="spese" aria-label="Spese" hidden>
+      <div class="grid">
+        <div class="card c12">
+          <div class="ct"><h2>Dove vanno le uscite</h2><span class="sub" id="uscHint"></span></div>
+          <div class="bars" id="bars"></div><div id="reconBox"></div>
+        </div>
+        <div class="card c6 dashcard" style="display:none">
+          <div class="ct"><h2>Per natura</h2><span class="sub">fisse · abbonamenti · consumo</span></div>
+          <div class="bars" id="dNat"></div>
+        </div>
+        <div class="card c6 dashcard" style="display:none">
+          <div class="ct"><h2>Da dove escono i soldi</h2><span class="sub">per strumento</span></div>
+          <div class="bars" id="dStrum"></div>
         </div>
       </div>
+    </section>
 
-      <!-- CATEGORIE -->
-      <div class="card c7">
-        <div class="ct"><h2>Dove vanno le uscite</h2><span class="sub" id="uscHint"></span></div>
-        <div class="bars" id="bars"></div>
-        <div id="reconBox"></div>
+    <!-- DISPONIBILITÀ -->
+    <section class="sec" role="tabpanel" data-sec="disp" aria-label="Saldi" hidden>
+      <div class="grid">
+        <div class="card c12 dashcard" style="display:none">
+          <div class="ct"><h2>Disponibilità</h2><span class="sub">liquidità per conto · si ricarica dal conto ING</span></div>
+          <div id="dDisp"></div>
+        </div>
       </div>
+    </section>
 
-      <!-- BILANCIO + PATRIMONIO -->
-      <div class="card c5 dashcard" style="display:none">
-        <div class="ct"><h2>Bilancio &amp; patrimonio</h2></div>
-        <div class="bars" id="dWfall"></div>
-        <div class="divl"></div>
-        <div id="dPatr"></div>
+    <!-- RICORRENTI -->
+    <section class="sec" role="tabpanel" data-sec="ricorrenti" aria-label="Ricorrenti" hidden>
+      <div class="grid">
+        <div class="card c6 dashcard" style="display:none">
+          <div class="ct"><h2>Servizi web</h2><span class="sub">€/mese stimato</span></div>
+          <div class="bars" id="dWeb"></div>
+        </div>
+        <div class="card c6 dashcard" style="display:none">
+          <div class="ct"><h2>Abbonamenti</h2><span class="sub">€/mese · €/anno</span></div>
+          <div id="dSub"></div>
+        </div>
+        <div class="card c12 dashcard" style="display:none">
+          <div class="ct"><h2>Consulente — piano risparmio</h2><span class="sub">disdette · proiezione futura</span></div>
+          <div id="dPlan"></div>
+        </div>
       </div>
+    </section>
 
-      <!-- DISPONIBILITÀ -->
-      <div class="card c12 dashcard" style="display:none">
-        <div class="ct"><h2>Disponibilità</h2><span class="sub">liquidità per conto · si ricarica dal conto ING</span></div>
-        <div id="dDisp"></div>
+    <!-- DA SISTEMARE -->
+    <section class="sec" role="tabpanel" data-sec="sistemare" aria-label="Da fare" hidden>
+      <div class="grid">
+        <div class="card c12 clarify" id="clarifyCard" style="display:none">
+          <div class="ct"><h2>🔍 Da chiarire</h2><span class="sub" id="clarHint"></span></div>
+          <div id="clarList"></div>
+          <div class="clarActions">
+            <button id="clarApply">✓ Applica e memorizza</button>
+            <button id="clarForget" class="lnk">Dimentica regole apprese</button>
+            <span class="clarNote" id="clarSaved"></span>
+          </div>
+        </div>
+        <div class="card c12 clarify" id="jasperCard" style="display:none">
+          <div class="ct"><h2>📥 Da chiarire — segnalati da Jasper</h2><span class="sub" id="jasperHint"></span></div>
+          <div id="jasperList"></div>
+          <div class="clarActions">
+            <button id="jasperSave">✓ Salva nel vault</button>
+            <span class="clarNote" id="jasperMsg"></span>
+          </div>
+        </div>
+        <div class="card c12">
+          <div class="notes"><div class="t">Cosa ho fatto con i tuoi dati (riconciliazione)</div><ul id="notes"></ul></div>
+          <button class="reset" id="reset">↺ Ricomincia con altri file</button>
+        </div>
       </div>
-
-      <!-- SOSTENIBILITÀ -->
-      <div class="card c7 dashcard" style="display:none">
-        <div class="ct"><h2>Sostenibilità</h2><span class="sub">entrate → uscite · pareggio a 45°</span></div>
-        <div id="dSost"></div>
-      </div>
-
-      <!-- NATURA -->
-      <div class="card c6 dashcard" style="display:none">
-        <div class="ct"><h2>Per natura</h2><span class="sub">fisse · abbonamenti · consumo</span></div>
-        <div class="bars" id="dNat"></div>
-      </div>
-
-      <!-- STRUMENTO -->
-      <div class="card c6 dashcard" style="display:none">
-        <div class="ct"><h2>Da dove escono i soldi</h2><span class="sub">per strumento</span></div>
-        <div class="bars" id="dStrum"></div>
-      </div>
-
-      <!-- SERVIZI WEB -->
-      <div class="card c6 dashcard" style="display:none">
-        <div class="ct"><h2>Servizi web</h2><span class="sub">€/mese stimato</span></div>
-        <div class="bars" id="dWeb"></div>
-      </div>
-
-      <!-- ABBONAMENTI -->
-      <div class="card c6 dashcard" style="display:none">
-        <div class="ct"><h2>Abbonamenti</h2><span class="sub">€/mese · €/anno</span></div>
-        <div id="dSub"></div>
-      </div>
-
-      <!-- CONSULENTE -->
-      <div class="card c12 dashcard" style="display:none">
-        <div class="ct"><h2>Consulente — piano risparmio</h2><span class="sub">disdette · proiezione futura</span></div>
-        <div id="dPlan"></div>
-      </div>
-
-      <!-- NOTE -->
-      <div class="card c12">
-        <div class="notes"><div class="t">Cosa ho fatto con i tuoi dati (riconciliazione)</div><ul id="notes"></ul></div>
-        <button class="reset" id="reset">↺ Ricomincia con altri file</button>
-      </div>
-    </div>
+    </section>
   </div>
 
   <div class="priv"><span>🔒</span><span>App open-source e generica: nessun dato lascia il browser.</span></div>
@@ -364,6 +389,34 @@ function addCustomCatEverywhere(name){addCustomCat(name);document.querySelectorA
 function catSelectHandler(sel){if(sel.value==="__new__"){const nc=prompt("Nome della nuova categoria:");if(nc&&nc.trim()){addCustomCatEverywhere(nc.trim());sel.value=nc.trim();}else sel.value="";}}
 
 function showDash(on){document.querySelectorAll(".dashcard").forEach(el=>el.style.display=on?"":"none");}
+/* ---- Navigazione a sezioni (pannello di controllo) ---- */
+const SECTIONS=["panoramica","spese","disp","ricorrenti","sistemare"];
+function showSection(sec){
+  if(SECTIONS.indexOf(sec)<0)sec="panoramica";
+  document.querySelectorAll("#out .sec").forEach(s=>{s.hidden=(s.dataset.sec!==sec);});
+  document.querySelectorAll(".navbtn").forEach(b=>b.setAttribute("aria-current",b.dataset.sec===sec?"page":"false"));
+  try{localStorage.setItem("bilancio_sec",sec);}catch(e){}
+  window.scrollTo(0,0);
+}
+function routeFromHash(){let h=(location.hash||"").replace(/^#/,"");
+  if(SECTIONS.indexOf(h)<0){try{h=localStorage.getItem("bilancio_sec")||"panoramica";}catch(e){h="panoramica";}}
+  showSection(h);}
+function showApp(){E("appnav").hidden=false;routeFromHash();}
+function updateBadge(){
+  const c=E("clarifyCard").style.display==="none"?0:document.querySelectorAll("#clarList .clr-row").length;
+  const j=E("jasperCard").style.display==="none"?0:document.querySelectorAll("#jasperList .clr-row").length;
+  const n=c+j,b=E("navBadge");if(n>0){b.textContent=n>99?"99+":n;b.hidden=false;}else b.hidden=true;}
+(function initNav(){const all=[...document.querySelectorAll(".navbtn")];
+  all.forEach((b,i)=>{
+    b.addEventListener("click",()=>{location.hash=b.dataset.sec;showSection(b.dataset.sec);});
+    b.addEventListener("keydown",(e)=>{let j=-1;
+      if(e.key==="ArrowRight"||e.key==="ArrowDown")j=(i+1)%all.length;
+      else if(e.key==="ArrowLeft"||e.key==="ArrowUp")j=(i-1+all.length)%all.length;
+      else if(e.key==="Home")j=0;else if(e.key==="End")j=all.length-1;
+      if(j>=0){e.preventDefault();all[j].focus();all[j].click();}});
+  });
+  window.addEventListener("hashchange",routeFromHash);
+})();
 
 function renderResult(res,formati){
   E("files").innerHTML=(formati||[]).map(f=>{const ok=f.fmt!=="unknown";return `<span class="fchip"><span class="${ok?'ok':'no'}">${ok?'✓':'!'}</span>${esc(f.name)} <span class="k">${esc(FMT_LABEL[f.fmt]||f.fmt)}</span></span>`;}).join("");
@@ -384,7 +437,7 @@ function renderResult(res,formati){
   if(nonsp.length)rec+=`<div class="recon">⇄ <b style="color:var(--ink-2)">Esclusi · non spese</b> (travasi tra conti tuoi, contante nel borsello): ${nonsp.map(c=>esc(c.cat)+" "+fmtEUR(c.amt)).join(" · ")}</div>`;
   E("reconBox").innerHTML=rec;
   E("notes").innerHTML=((res.note&&res.note.length)?res.note:["—"]).map(n=>`<li>${esc(n)}</li>`).join("");
-  E("out").style.display="block";
+  E("out").style.display="block";showApp();
 }
 function barsRow(items){const max=Math.max(1,...items.map(i=>Math.abs(i.val)));
   return items.map(i=>{const w=Math.max(2,100*Math.abs(i.val)/max);
@@ -503,7 +556,7 @@ function renderSost(p){const host=E("dSost");if(!host)return;
 function catOptions(sel){return `<option value="">— scegli categoria —</option>`+allCats().map(c=>`<option${c===sel?" selected":""}>${esc(c)}</option>`).join("")+`<option value="__new__">➕ Nuova categoria…</option>`;}
 function renderClarify(list){const card=E("clarifyCard");list=list||[];const rules=getRules();
   E("clarSaved").textContent=rules.length?("🧠 "+rules.length+" regole apprese"):"";
-  if(!list.length){card.style.display="none";return;}
+  if(!list.length){card.style.display="none";updateBadge();return;}
   const tot=list.reduce((a,b)=>a+b.amt,0);
   E("clarHint").textContent=list.length+" voci · "+fmtEUR(tot)+" — assegna la categoria, la ricordo io";
   E("clarList").innerHTML=list.map((it,i)=>`<div class="clr-row" data-i="${i}">
@@ -512,6 +565,7 @@ function renderClarify(list){const card=E("clarifyCard");list=list||[];const rul
     <select class="clr-cat">${catOptions()}</select></div>`).join("");
   card.style.display="";
   E("clarList").querySelectorAll(".clr-cat").forEach(sel=>sel.addEventListener("change",()=>catSelectHandler(sel)));
+  updateBadge();
 }
 function render(){const res=window.BilancioEngine.consolidate(loaded.map(f=>({name:f.name,text:f.text})),getRules());renderResult(res,res.formati);renderClarify(res.daChiarire);E("jasperCard").style.display="none";showDash(false);E("out").scrollIntoView({behavior:"smooth",block:"start"});}
 E("clarApply").addEventListener("click",()=>{
@@ -573,9 +627,9 @@ async function loadJasper(cfg){try{
   const data=await r.json();mlSha=data.sha;mlItems=JSON.parse(b64ToUtf8(data.content)||"[]");renderJasper();
 }catch(e){E("jasperCard").style.display="none";}}
 function renderJasper(){const card=E("jasperCard");
-  if(!Array.isArray(mlItems)){card.style.display="none";return;}
+  if(!Array.isArray(mlItems)){card.style.display="none";updateBadge();return;}
   const todo=mlItems.filter(isDaChiarire);
-  if(!todo.length){card.style.display="none";E("jasperMsg").textContent="";return;}
+  if(!todo.length){card.style.display="none";E("jasperMsg").textContent="";updateBadge();return;}
   const tot=todo.reduce((a,b)=>a+Math.abs(b.importo||0),0);
   E("jasperHint").textContent=todo.length+" voci · "+fmtEUR(tot)+" — Jasper le ha raccolte, tu dai la categoria";
   E("jasperList").innerHTML=todo.map(m=>`<div class="clr-row" data-id="${esc(m.id)}">
@@ -584,6 +638,7 @@ function renderJasper(){const card=E("jasperCard");
     <select class="clr-cat">${catOptions(suggestCat(m))}</select></div>`).join("");
   card.style.display="";
   E("jasperList").querySelectorAll(".clr-cat").forEach(sel=>sel.addEventListener("change",()=>catSelectHandler(sel)));
+  updateBadge();
 }
 function applyJasperChoices(rows){let n=0,rules=getRules();rows.forEach(row=>{const id=row.getAttribute("data-id"),cat=row.querySelector(".clr-cat").value;
   if(cat&&cat!=="__new__"){const m=mlItems.find(x=>x.id===id);if(m){m.categoria=cat;if(m.stato==="da definire")m.stato="live";addCustomCat(cat);
