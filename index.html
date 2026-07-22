@@ -129,6 +129,13 @@
   .projbox .pvv{font-size:20px;font-weight:700;letter-spacing:-.02em;margin-top:3px;}
   .projbox .pvv.good{color:var(--good);}
   .projbox .pf{font-size:11.5px;color:var(--ink-2);margin-top:2px;}
+  /* Disponibilità */
+  .disp{display:flex;gap:10px;flex-wrap:wrap;}
+  .dispbox{flex:1;min-width:150px;border:1px solid var(--hair);border-radius:12px;padding:13px;background:var(--surface-2);}
+  .dispbox .dl{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;}
+  .dispbox input{width:100%;margin-top:7px;font-size:19px;font-weight:700;letter-spacing:-.01em;padding:7px 9px;border:1px solid var(--hair-2);border-radius:8px;background:var(--plane);color:var(--ink);}
+  .disptot{margin-top:13px;font-size:13.5px;color:var(--ink-2);}
+  .disptot b{font-size:20px;color:var(--ink);}
 </style>
 </head>
 <body>
@@ -201,6 +208,12 @@
         <div class="bars" id="dWfall"></div>
         <div class="divl"></div>
         <div id="dPatr"></div>
+      </div>
+
+      <!-- DISPONIBILITÀ -->
+      <div class="card c12 dashcard" style="display:none">
+        <div class="ct"><h2>Disponibilità</h2><span class="sub">liquidità per conto · si ricarica dal conto ING</span></div>
+        <div id="dDisp"></div>
       </div>
 
       <!-- SOSTENIBILITÀ -->
@@ -340,6 +353,10 @@ const CUSTOM_KEY="bilancio_cats";
 const getCustomCats=()=>{try{return JSON.parse(localStorage.getItem(CUSTOM_KEY)||"[]");}catch(e){return [];}};
 const addCustomCat=(c)=>{c=(c||"").trim();if(!c)return;const l=getCustomCats();if(!l.includes(c)&&!CATS.includes(c)){l.push(c);try{localStorage.setItem(CUSTOM_KEY,JSON.stringify(l));}catch(e){}}};
 const allCats=()=>CATS.concat(getCustomCats().filter(c=>!CATS.includes(c)));
+/* saldi/disponibilità per conto (ING, Revolut, borsello) — persistono e si sincronizzano nel vault */
+const SALDI_KEY="bilancio_saldi";
+const getSaldi=()=>{try{return JSON.parse(localStorage.getItem(SALDI_KEY)||"{}");}catch(e){return {};}};
+const setSaldi=(o)=>{try{localStorage.setItem(SALDI_KEY,JSON.stringify(o));}catch(e){}};
 /* suggerisce la categoria da una regola già insegnata (così i "simili" ci finiscono) */
 const suggestCat=(m)=>{const s=((m.merchant||"")+" "+(m.nota||"")+" "+(m.strumento||"")).toLowerCase();for(const r of getRules()){if(r.match&&s.includes(String(r.match).toLowerCase()))return r.cat;}return "";};
 function addCustomCatEverywhere(name){addCustomCat(name);document.querySelectorAll("select.clr-cat").forEach(sel=>{if(![...sel.options].some(o=>o.textContent===name)){const o=document.createElement("option");o.textContent=name;sel.insertBefore(o,sel.lastElementChild);}});}
@@ -386,9 +403,24 @@ function renderDashboard(p){
   const sw=p.servizi_web||{};E("dWeb").innerHTML=barsRow(Object.keys(sw).map(k=>({label:k,val:sw[k]})));
   const subs=(p.abbonamenti||[]).slice().sort((a,b)=>b.mese-a.mese),tot=subs.reduce((a,b)=>a+(b.mese||0),0);
   E("dSub").innerHTML=`<table class="sub"><tbody>`+subs.map(s=>`<tr><td>${esc(s.servizio)} <span style="color:var(--muted);font-size:11px">${esc(s.categoria)}</span></td><td class="num" style="text-align:right">${fmtEUR(s.mese)}/m</td><td class="num" style="text-align:right;color:var(--muted)">${fmtEUR((s.mese||0)*12)}/a</td></tr>`).join("")+`</tbody></table><div style="font-size:11.5px;color:var(--ink-2);margin-top:9px">Totale ≈ <b>${fmtEUR(tot)}/mese</b> · ${fmtEUR(tot*12)}/anno</div>`;
+  renderDisponibilita(p);
   renderSost(p);
   renderConsulente(p);
   showDash(true);
+}
+/* Disponibilità: saldi delle riserve (ING, Revolut, contante) — Revolut e borsello si alimentano da giroconti ING */
+function renderDisponibilita(p){const host=E("dDisp");if(!host)return;
+  const s=getSaldi();
+  const rows=[["ing","Conto ING","🏦"],["revolut","Revolut ••3351","💳"],["borsello","Contante (borsello)","👛"]];
+  const val=(k)=>{const v=(k==="borsello"&&s.borsello==null)?(p.borsello||""):s[k];return v==null?"":v;};
+  host.innerHTML=`<div class="disp">`+rows.map(([k,lab,ic])=>`<div class="dispbox"><div class="dl">${ic} ${esc(lab)}</div><input type="number" class="disp-in" data-k="${k}" value="${val(k)}" step="0.01" inputmode="decimal" placeholder="0,00"></div>`).join("")+`</div>
+    <div class="disptot">Totale disponibile: <b id="dispTot" class="num">—</b></div>
+    <div style="font-size:11px;color:var(--muted);margin-top:8px">Revolut e il contante sono salvadanai: si <b>caricano</b> con giroconti dal conto ING e si <b>svuotano</b> spendendo. Aggiorna un saldo quando cambia — resta sincronizzato su ogni dispositivo.</div>`;
+  const upd=()=>{let t=0;host.querySelectorAll(".disp-in").forEach(i=>{t+=parseFloat(i.value)||0;});E("dispTot").textContent=fmtEUR(t);};
+  host.querySelectorAll(".disp-in").forEach(i=>{
+    i.addEventListener("input",()=>{const o=getSaldi();o[i.dataset.k]=parseFloat(i.value)||0;setSaldi(o);upd();});
+    i.addEventListener("change",()=>saveVaultConfig());});
+  upd();
 }
 /* Consulente: pianifica disdette e proietta il risparmio nel tempo */
 let PLAN={subs:[],n:12};
@@ -573,6 +605,7 @@ function mergeConfig(remote){
   const map={};(Array.isArray(remote.regole)?remote.regole:[]).forEach(x=>{if(x&&x.match)map[String(x.match).toLowerCase()]=x;});
   getRules().forEach(x=>{if(x&&x.match)map[String(x.match).toLowerCase()]=x;});
   setRules(Object.values(map));
+  if(remote.saldi&&typeof remote.saldi==="object")setSaldi(remote.saldi);
 }
 const cfgHeaders=(cfg)=>({Authorization:"Bearer "+cfg.token,Accept:"application/vnd.github+json"});
 async function loadVaultConfig(cfg){try{
@@ -581,7 +614,7 @@ async function loadVaultConfig(cfg){try{
   const data=await r.json();cfgSha=data.sha;mergeConfig(JSON.parse(b64ToUtf8(data.content)||"{}"));
 }catch(e){}}
 async function saveVaultConfig(cfgArg){const cfg=cfgArg||getCfg();if(!cfg||!cfg.token)return;
-  const build=()=>utf8ToB64(JSON.stringify({categorie:getCustomCats(),regole:getRules()},null,2));
+  const build=()=>utf8ToB64(JSON.stringify({categorie:getCustomCats(),regole:getRules(),saldi:getSaldi()},null,2));
   try{const body={message:"App: sync categorie e regole (multi-dispositivo)",content:build()};if(cfgSha)body.sha=cfgSha;
     let r=await fetch(ghUrl(cfg,"config-app.json"),{method:"PUT",headers:cfgHeaders(cfg),body:JSON.stringify(body)});
     if(r.status===409){const s=await fetch(ghUrl(cfg,"config-app.json"),{headers:cfgHeaders(cfg)});
