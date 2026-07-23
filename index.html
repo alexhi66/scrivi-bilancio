@@ -335,16 +335,17 @@
     if(j.includes("STARTED DATE")||(j.includes("TYPE")&&j.includes("AMOUNT")))return"revolut";
     return"unknown";}
   const RULES=[["↔ Giroconto (conti propri)",/giroconto|conto proprio|bonifico.*revolut|revolut.*ricarica|ricarica revolut/i],
-    ["Viaggi/Vacanze",/airbnb|booking\.com|\bbooking\b|expedia|ryanair|easyjet|\bhotel\b|ostello|resort/i],
+    ["Viaggi/Vacanze",/airbnb|booking\.com|\bbooking\b|expedia|ryanair|easyjet|\bhotel\b|ostello|resort|edreams|vacaciones|tirrenica/i],
     ["Casa/Affitti",/locazione|affitto|\brent\b|condominio/i],["Finanziamenti",/cofidis|findomestic|\bagos\b|\brata\b|prestito|mutuo/i],
     ["Utenze",/\benel\b|\beni gas\b|\ba2a\b|\bhera\b|\biren\b|alperia|\bseab\b|vodafone|\btim\b|iliad|fastweb|\bgas\b|\bacqua\b|rifiuti|\btari\b|telepass/i],
+    ["Parcheggi",/easypark|\bpark\b|parcheggi|parking/i],
     ["Tasse/PA",/pagopa|pago pa|agenzia delle entrate|\bf24\b|\bspid\b|comune di|\bimu\b|\binps\b/i],
-    ["AI/Tech",/anthropic|openai|chatgpt|\bclaude\b|supabase|vercel|github|cloudflare|\baws\b|google.*one|microsoft|hostinger|midjourney|vidiq|\babacus\b|\bfal\b/i],
+    ["AI/Tech",/anthropic|openai|chatgpt|\bclaude\b|supabase|vercel|github|cloudflare|\baws\b|google.*one|microsoft|hostinger|midjourney|vidiq|\babacus\b|\bfal\b|bluehost|movavi/i],
     ["Abbonamenti/Streaming",/netflix|spotify|disney|prime video|primevideo|\bnow\b|\bsky\b|mediaset|\bdazn\b|youtube|\bapple\b|google.*play|beatport|patreon|avast|\brti\b|infinity/i],
     ["Alimentari/Spesa",/despar|conad|\bcoop\b|esselunga|\blidl\b|eurospin|carrefour|supermerc|alimentari|macelleria|frantoio/i],
     ["Carburante",/\besso\b|\btamoil\b|\bq8\b|\bagip\b|\beni\b|\bip\b|italiana petroli|\bshell\b|distributore|benzina|\bpv\b/i],
-    ["Ristoranti/Bar/Svago",/ristorant|trattoria|osteria|pizzeria|\bbar\b|\bcaff|pasticc|gelat|\bsushi\b|autogrill|\bpub\b|lido|bagno|ricci|hotel|riviera|konditorei/i],
-    ["Shopping",/amazon|\bamzn\b|zalando|\bzara\b|decathlon|\bikea\b|mediaworld|abbigliamento|ramonda/i],
+    ["Ristoranti/Bar/Svago",/ristorant|trattoria|osteria|pizzeria|\bbar\b|\bcaff|pasticc|gelat|\bsushi\b|autogrill|\bpub\b|lido|bagno|ricci|hotel|riviera|konditorei|uci ?italia|uciitalia/i],
+    ["Shopping",/amazon|\bamzn\b|zalando|\bzara\b|decathlon|\bikea\b|mediaworld|abbigliamento|ramonda|prestigeprint|prestigepri|profumerie|tafuri/i],
     ["Salute",/farmacia|\bstudio dr\b|\bdott\b|ospedale|clinica|dentist|\bmedic|khuen/i],
     ["Tabacchi",/tabacc|monopoli/i],["→ Contante (borsello)",/prelievo|\batm\b|bancomat/i],
     ["Commissioni/Banca",/commission|imposta di bollo|\bbolli\b|\bcanone\b|servizio alert|maggiorazione|spese conto|recupero imposta/i]];
