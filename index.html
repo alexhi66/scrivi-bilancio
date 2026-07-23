@@ -99,6 +99,10 @@
   .cvs{color:var(--muted);font-size:10px;white-space:nowrap;}
   .cvi{text-align:right;font-weight:600;color:var(--ink);}
   @media(max-width:520px){.cvrow{grid-template-columns:1fr 60px;}.cvs{display:none;}}
+  .subeff-tot{font-size:27px;font-weight:800;color:var(--ink);line-height:1.05;}
+  .subeff-tot small{display:block;font-size:11px;font-weight:500;color:var(--muted);margin-top:4px;max-width:340px;}
+  .subeff-list{margin-top:13px;display:flex;flex-direction:column;gap:6px;}
+  .subeff-list .cvrow{grid-template-columns:1fr 72px;}
   .recon{margin-top:10px;padding:8px 10px;background:var(--surface-2);border:1px dashed var(--hair-2);border-radius:8px;font-size:11.5px;color:var(--muted);}
   .divl{border-top:1px solid var(--hair);margin:13px 0 11px;}
   .notes{font-size:12px;color:var(--ink-2);line-height:1.7;}.notes .t{font-weight:600;color:var(--ink);margin-bottom:3px;}
@@ -263,6 +267,10 @@
     <!-- RICORRENTI -->
     <section class="sec" role="tabpanel" data-sec="ricorrenti" aria-label="Ricorrenti" hidden>
       <div class="grid">
+        <div class="card c12 dashcard" id="subEffCard" style="display:none">
+          <div class="ct"><h2>💳 Totale abbonamenti</h2><span class="sub" id="subEffHint">spesa reale dai movimenti</span></div>
+          <div id="dSubEff"></div>
+        </div>
         <div class="card c6 dashcard" style="display:none">
           <div class="ct"><h2>Servizi web</h2><span class="sub">€/mese stimato</span></div>
           <div class="bars" id="dWeb"></div>
@@ -490,6 +498,14 @@ function renderDashboard(p){
   const sw=p.servizi_web||{};E("dWeb").innerHTML=barsRow(Object.keys(sw).map(k=>({label:k,val:sw[k]})));
   const subs=(p.abbonamenti||[]).slice().sort((a,b)=>b.mese-a.mese),tot=subs.reduce((a,b)=>a+(b.mese||0),0);
   E("dSub").innerHTML=`<table class="sub"><tbody>`+subs.map(s=>`<tr><td>${esc(s.servizio)} <span style="color:var(--muted);font-size:11px">${esc(s.categoria)}</span></td><td class="num" style="text-align:right">${fmtEUR(s.mese)}/m</td><td class="num" style="text-align:right;color:var(--muted)">${fmtEUR((s.mese||0)*12)}/a</td></tr>`).join("")+`</tbody></table><div style="font-size:11.5px;color:var(--ink-2);margin-top:9px">Totale ≈ <b>${fmtEUR(tot)}/mese</b> · ${fmtEUR(tot*12)}/anno</div>`;
+  // Totale abbonamenti REALE (dai movimenti): un unico numero, a prescindere dalla categoria
+  const ae=p.abbonamenti_eff;
+  if(ae&&Array.isArray(ae.voci)&&ae.voci.length){
+    E("subEffHint").textContent=ae.voci.length+" servizi · dai movimenti reali";
+    E("dSubEff").innerHTML=`<div class="subeff-tot">${fmtEUR(ae.totale)}<small>speso in abbonamenti nel periodo (giu–lug) · sono sparsi tra AI/Tech, Utenze, Streaming</small></div>`+
+      `<div class="subeff-list">`+ae.voci.map(v=>`<div class="cvrow"><span class="cvm">${esc(v.m)}</span><span class="cvi num">${fmtEUR(v.i)}</span></div>`).join("")+`</div>`;
+    E("subEffCard").style.display="";
+  }else if(E("subEffCard")){E("subEffCard").style.display="none";}
   renderDisponibilita(p);
   renderSost(p);
   renderConsulente(p);
