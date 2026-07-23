@@ -527,7 +527,7 @@ function calcBorsello(){const s=getSaldi();
   (Array.isArray(mlItems)?mlItems:[]).forEach(m=>{
     const dt=String(m.data||""),imp=Math.abs(+m.importo||0);
     const strum=String(m.strumento||"").toLowerCase(),cat=String(m.categoria||"").toLowerCase();
-    if(/contant/.test(strum)&&!/preliev/.test(cat)){ if(!d0||dt>=d0){spese+=imp;nSpese++;} }        // spesa in contante
+    if(/contant/.test(strum)&&!/preliev/.test(cat)){ if(!d0||dt>d0){spese+=imp;nSpese++;} }          // spesa in contante DOPO il checkpoint
     else if(/preliev/.test(cat)||/contante \(borsello\)/.test(cat)){ if(d0&&dt>d0)prelievi+=imp; }   // prelievo = ricarica
   });
   return {base,d0,spese,nSpese,prelievi,saldo:+(base+prelievi-spese).toFixed(2)};
@@ -555,7 +555,7 @@ function renderDisponibilita(p){const host=E("dDisp");if(!host)return;
     </div>
     <div class="disptot">Totale disponibile: <b id="dispTot" class="num">—</b></div>
     <div id="liveCalc"></div>
-    <div style="font-size:11px;color:var(--muted);margin-top:8px"><b>Revolut e contante</b> sono <b>calcolati live</b>: parti dal saldo (estratto / conteggio) e l'app scala i pagamenti che Jasper registra. <b>ING</b> è il saldo da <b>estratto</b> (ha movimenti automatici — stipendio, addebiti — che non passano live). A fine mese l'estratto ricalibra ogni saldo.</div>`;
+    <div style="font-size:11px;color:var(--muted);margin-top:8px"><b>Revolut e contante</b> sono <b>calcolati live</b>: inserisci il saldo che hai <b>adesso</b> (estratto Revolut / contante contato) e l'app scala i pagamenti <b>successivi</b> che Jasper registra. <b>ING</b> è il saldo da <b>estratto</b> (ha movimenti automatici — stipendio, addebiti — che non passano live). A fine mese l'estratto ricalibra ogni saldo.</div>`;
   const renderLive=()=>{
     const rev=calcSaldoLive("revolut_base","revolut_data",/revolut/i);
     const cash=calcBorsello();
