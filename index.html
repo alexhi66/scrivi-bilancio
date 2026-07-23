@@ -225,6 +225,10 @@
         <div class="card kpi inn c4 k4"><span class="lab">Entrate</span><span class="val num" id="kIn">—</span><span class="foot" id="kInFoot"></span></div>
         <div class="card kpi o c4 k4"><span class="lab">Uscite</span><span class="val num" id="kOut">—</span><span class="foot">6 fonti riconciliate</span></div>
         <div class="card kpi sav c4 k4" id="kSavCard"><span class="lab">Risparmio</span><span class="val num" id="kSav">—</span><span class="foot" id="kSavFoot"></span></div>
+        <div class="card c12 dashcard" id="storicoCard" style="display:none">
+          <div class="ct"><h2>Bilancio mensile</h2><span class="sub" id="storicoHint">attivo / passivo nel tempo</span></div>
+          <div id="dStorico"></div>
+        </div>
         <div class="card c5 dashcard" style="display:none">
           <div class="ct"><h2>Bilancio &amp; patrimonio</h2></div>
           <div class="bars" id="dWfall"></div><div class="divl"></div><div id="dPatr"></div>
@@ -735,8 +739,45 @@ async function loadFromVault(){const cfg=getCfg();if(!cfg)return;E("refreshBtn")
     renderDashboard(p);E("clarifyCard").style.display="none";E("out").scrollIntoView({behavior:"smooth",block:"start"});
     setStatus("✓ Caricato dal vault"+(p.etichetta?" ("+p.etichetta+")":""),"ok");
     collapseUpload(true);   // dati dal vault presenti → la dashboard è protagonista, upload in secondo piano
-    await loadVaultConfig(cfg);loadJasper(cfg);
+    await loadVaultConfig(cfg);loadJasper(cfg);loadStorico(cfg);
   }catch(e){setStatus("Errore: "+e.message,"err");}finally{_done();}}
+
+/* ---- Bilancio storico mensile (storico-mensile.json · da estratti verificati) ---- */
+async function loadStorico(cfg){try{
+  const url="https://api.github.com/repos/"+cfg.owner+"/"+cfg.repo+"/contents/storico-mensile.json";
+  const r=await fetch(url,{headers:{Authorization:"Bearer "+cfg.token,Accept:"application/vnd.github+json"}});
+  if(!r.ok){E("storicoCard").style.display="none";return;}
+  const data=await r.json();const st=JSON.parse(b64ToUtf8(data.content)||"[]");
+  renderBilancioStorico(Array.isArray(st)?st:[]);
+}catch(e){E("storicoCard").style.display="none";}}
+function renderBilancioStorico(st){const host=E("dStorico"),card=E("storicoCard");
+  if(!host||!st.length){if(card)card.style.display="none";return;}
+  card.style.display="";
+  const best=st.reduce((a,b)=>b.risparmio>a.risparmio?b:a),worst=st.reduce((a,b)=>b.risparmio<a.risparmio?b:a);
+  const cumLast=st[st.length-1].cumulato;
+  E("storicoHint").textContent="risparmio operativo · cumulato "+(cumLast>=0?"+":"−")+fmtEUR(Math.abs(cumLast));
+  // scala barre
+  const W=680,H=250,padL=40,padR=12,padT=22,padB=42,pw=W-padL-padR,ph=H-padT-padB;
+  const vals=st.map(d=>d.risparmio),mx=Math.max(...vals,0),mn=Math.min(...vals,0);
+  const top=Math.ceil(mx/500)*500||500,bot=Math.floor(mn/500)*500;
+  const y=(v)=>padT+ph*(top-v)/(top-bot),z=y(0),step=pw/st.length,bw=Math.min(46,step*0.5);
+  let s='';
+  for(let g=bot;g<=top;g+=500){const yy=y(g);
+    s+=`<line x1="${padL}" x2="${W-padR}" y1="${yy}" y2="${yy}" stroke="var(--hair)" stroke-width="1"/>`;
+    s+=`<text x="${padL-7}" y="${yy+3.5}" text-anchor="end" fill="var(--muted)" font-size="10.5">${g?(g/1000)+'k':'0'}</text>`;}
+  s+=`<line x1="${padL}" x2="${W-padR}" y1="${z}" y2="${z}" stroke="var(--ink-2)" stroke-width="1.2" opacity=".5"/>`;
+  st.forEach((d,i)=>{const cx=padL+step*i+step/2,pos=d.risparmio>=0,col=pos?'var(--in)':'var(--out)';
+    const yt=pos?y(d.risparmio):z,h=Math.max(2,Math.abs(z-y(d.risparmio)));
+    s+=`<rect x="${cx-bw/2}" y="${yt}" width="${bw}" height="${h}" rx="4" fill="${col}"><title>${esc(d.mese)}: ${(d.risparmio>=0?'+':'−')}${fmtEUR(Math.abs(d.risparmio))} (entrate ${fmtEUR(d.entrate)}, uscite ${fmtEUR(d.uscite)})</title></rect>`;
+    s+=`<text x="${cx}" y="${pos?yt-5:yt+h+13}" text-anchor="middle" fill="${col}" font-size="10.5" font-weight="700">${(d.risparmio>=0?'+':'−')+Math.round(Math.abs(d.risparmio))}</text>`;
+    s+=`<text x="${cx}" y="${H-14}" text-anchor="middle" fill="var(--muted)" font-size="11">${esc(d.label)}</text>`;});
+  host.innerHTML=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;overflow:visible" role="img" aria-label="Bilancio mensile attivo passivo">${s}</svg>`
+    +`<div style="display:flex;gap:16px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin-top:4px">`
+    +`<span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--in);vertical-align:-1px;margin-right:5px"></span>attivo</span>`
+    +`<span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--out);vertical-align:-1px;margin-right:5px"></span>passivo</span>`
+    +`<span>miglior mese <b style="color:var(--ink-2)">${esc(best.label)} +${fmtEUR(best.risparmio)}</b> · peggiore <b style="color:var(--ink-2)">${esc(worst.label)} −${fmtEUR(Math.abs(worst.risparmio))}</b></span></div>`
+    +`<div style="font-size:11px;color:var(--muted);margin-top:8px">Risparmio = entrate − uscite del conto, <b>esclusi i travasi</b> verso Revolut/contante (restano tuoi). Da estratti ING verificati. Cresce ogni mese col nuovo estratto.</div>`;
+}
 
 /* ---- Archivio costi non chiari di Jarvis (movimenti-live.json · lettura + scrittura) ---- */
 const ML_PATH="movimenti-live.json";
