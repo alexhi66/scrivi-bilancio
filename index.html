@@ -352,7 +352,7 @@
     if(userRules)for(const u of userRules){if(u.match&&s.includes(String(u.match).toLowerCase()))return u.cat;}
     for(const[c,re]of RULES)if(re.test(d))return c;return"Altro/Da rivedere";}
   // "Google Play" in banca non dice il servizio → lo si deduce dall'importo (cronologia Play)
-  const GPLAY_MAP={11.99:["Abbonamenti/Streaming","Spotify Premium"],13.99:["Abbonamenti/Streaming","YouTube Premium"],5.99:["Abbonamenti/Streaming","Back Then VIP"],69.99:["Abbonamenti/Streaming","Filmora (annuale)"],14.99:["Shopping","Clash Royale — Diamond Pass"],2.49:["Shopping","Clash Royale — offerta"],0.99:["Shopping","Gioco — acquisto"]};
+  const GPLAY_MAP={11.99:["Abbonamenti/Streaming","Spotify Premium"],13.99:["Abbonamenti/Streaming","YouTube Premium"],7.99:["Abbonamenti/Streaming","YouTube Premium Lite"],5.99:["Abbonamenti/Streaming","Back Then VIP"],69.99:["Abbonamenti/Streaming","Filmora (annuale)"],14.99:["Shopping","Clash Royale — Diamond Pass"],2.49:["Shopping","Clash Royale — offerta"],0.99:["Shopping","Gioco — acquisto"]};
   function gplayCat(desc,amt){const s=(desc||"").toLowerCase();if(s.includes("google")&&s.includes("play")){const info=GPLAY_MAP[+Math.abs(+amt).toFixed(2)];if(info)return info;}return null;}
   // chiave di raggruppamento per le voci non riconosciute: toglie date/numeri lunghi, tiene il "merchant"
   function cleanDesc(d){return (d||"").toLowerCase()
