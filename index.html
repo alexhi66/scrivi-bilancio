@@ -351,6 +351,9 @@
   function categorize(d,userRules){const s=(d||"").toLowerCase();
     if(userRules)for(const u of userRules){if(u.match&&s.includes(String(u.match).toLowerCase()))return u.cat;}
     for(const[c,re]of RULES)if(re.test(d))return c;return"Altro/Da rivedere";}
+  // "Google Play" in banca non dice il servizio → lo si deduce dall'importo (cronologia Play)
+  const GPLAY_MAP={11.99:["Abbonamenti/Streaming","Spotify Premium"],13.99:["Abbonamenti/Streaming","YouTube Premium"],5.99:["Abbonamenti/Streaming","Back Then VIP"],69.99:["Abbonamenti/Streaming","Filmora (annuale)"],14.99:["Shopping","Clash Royale — Diamond Pass"],2.49:["Shopping","Clash Royale — offerta"],0.99:["Shopping","Gioco — acquisto"]};
+  function gplayCat(desc,amt){const s=(desc||"").toLowerCase();if(s.includes("google")&&s.includes("play")){const info=GPLAY_MAP[+Math.abs(+amt).toFixed(2)];if(info)return info;}return null;}
   // chiave di raggruppamento per le voci non riconosciute: toglie date/numeri lunghi, tiene il "merchant"
   function cleanDesc(d){return (d||"").toLowerCase()
     .replace(/\d{2}[\/\-.]\d{2}([\/\-.]\d{2,4})?/g," ").replace(/\b\d{4,}\b/g," ")
@@ -368,7 +371,7 @@
   function consolidate(files,userRules){const norm=files.map(f=>normalize(f.text,f.name)).filter(Boolean);
     const hasConto=norm.some(n=>n.fmt==="ing_conto"),creditoFiles=norm.filter(n=>n.fmt==="ing_credito");
     const cats={};let entrate=0;const notes=[];const unmatched={};
-    const add=(d,a)=>{const c=categorize(d,userRules);cats[c]=(cats[c]||0)+a;
+    const add=(d,a)=>{const gp=gplayCat(d,a);const c=gp?gp[0]:categorize(d,userRules);cats[c]=(cats[c]||0)+a;
       if(c==="Altro/Da rivedere"){const k=cleanDesc(d)||"(vuoto)";const u=unmatched[k]||(unmatched[k]={sample:(d||"").trim(),amt:0,n:0});u.amt+=a;u.n++;}};
     for(const n of norm){
       if(n.fmt==="ing_conto"){entrate+=n.entrate;for(const row of n.usciteRows)add(row.desc,row.amt);
