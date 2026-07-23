@@ -88,6 +88,17 @@
   .bar .cat{font-size:12px;color:var(--ink-2);text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .bar .track{background:var(--track);border-radius:4px;height:15px;overflow:hidden;}.bar .fill{height:100%;background:var(--out);border-radius:4px;min-width:3px;}
   .bar .v{font-size:11.5px;font-weight:600;text-align:right;}.bar .v small{color:var(--muted);font-weight:500;}
+  .bar.clk{cursor:pointer;border-radius:6px;transition:background .12s;}.bar.clk:hover,.bar.clk:focus-visible{background:var(--surface-2);outline:none;}
+  .bar.clk .cat{position:relative;padding-left:13px;}
+  .bar.clk .cat::before{content:"›";position:absolute;left:2px;top:50%;transform:translateY(-50%);color:var(--muted);font-weight:700;transition:transform .15s;}
+  .bar.clk.open .cat::before{transform:translateY(-50%) rotate(90deg);}
+  .bar .cnt{color:var(--muted);font-weight:500;font-size:10.5px;}
+  .catvoci{margin:2px 0 8px;padding:6px 4px 6px 12px;border-left:2px solid var(--hair-2);display:flex;flex-direction:column;gap:5px;}
+  .cvrow{display:grid;grid-template-columns:1fr auto 66px;align-items:center;gap:8px;font-size:11.5px;}
+  .cvm{color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .cvs{color:var(--muted);font-size:10px;white-space:nowrap;}
+  .cvi{text-align:right;font-weight:600;color:var(--ink);}
+  @media(max-width:520px){.cvrow{grid-template-columns:1fr 60px;}.cvs{display:none;}}
   .recon{margin-top:10px;padding:8px 10px;background:var(--surface-2);border:1px dashed var(--hair-2);border-radius:8px;font-size:11.5px;color:var(--muted);}
   .divl{border-top:1px solid var(--hair);margin:13px 0 11px;}
   .notes{font-size:12px;color:var(--ink-2);line-height:1.7;}.notes .t{font-weight:600;color:var(--ink);margin-bottom:3px;}
@@ -436,7 +447,7 @@ function updateBadge(){
 
 function renderResult(res,formati){
   E("files").innerHTML=(formati||[]).map(f=>{const ok=f.fmt!=="unknown";return `<span class="fchip"><span class="${ok?'ok':'no'}">${ok?'✓':'!'}</span>${esc(f.name)} <span class="k">${esc(FMT_LABEL[f.fmt]||f.fmt)}</span></span>`;}).join("");
-  const all=(res.categorie||[]).map(c=>({cat:c.cat,amt:(c.amt!=null?c.amt:c.importo)}));
+  const all=(res.categorie||[]).map(c=>({cat:c.cat,amt:(c.amt!=null?c.amt:c.importo),voci:Array.isArray(c.voci)?c.voci:[]}));
   const nonsp=all.filter(c=>isNonSpesa(c.cat));
   const cats=all.filter(c=>!isNd(c.cat)&&!isNonSpesa(c.cat)),nd=all.filter(c=>isNd(c.cat)&&!isNonSpesa(c.cat));
   E("kIn").textContent=fmtEUR(res.entrate);E("kOut").textContent=fmtEUR(res.uscite);
@@ -446,8 +457,14 @@ function renderResult(res,formati){
   E("kSavFoot").textContent=pct!=null?(pct+"% delle entrate"+(pct<10?" · margine sottile":"")):"";
   const max=cats.length?cats[0].amt:1;
   E("uscHint").textContent=fmtEUR(res.uscite)+" · "+cats.length+" categorie";
-  E("bars").innerHTML=cats.map(c=>{const p=Math.round(100*c.amt/(res.uscite||1)),w=Math.max(2,100*c.amt/max);
-    return `<div class="bar"><span class="cat">${esc(c.cat)}</span><div class="track"><div class="fill" style="width:${w}%"></div></div><span class="v num">${fmtEUR(c.amt)} <small>${p}%</small></span></div>`;}).join("");
+  E("bars").innerHTML=cats.map((c,idx)=>{const p=Math.round(100*c.amt/(res.uscite||1)),w=Math.max(2,100*c.amt/max);
+    const has=c.voci&&c.voci.length,cid="cv"+idx;
+    const voci=has?`<div class="catvoci" id="${cid}" hidden>${c.voci.map(v=>`<div class="cvrow"><span class="cvm">${esc(v.m||'')}</span><span class="cvs">${esc(v.s||'')}</span><span class="cvi num">${fmtEUR(v.i)}</span></div>`).join("")}</div>`:"";
+    return `<div class="bar${has?' clk':''}"${has?` role="button" tabindex="0" aria-expanded="false" data-cv="${cid}"`:""}><span class="cat">${esc(c.cat)}${has?` <small class="cnt">${c.voci.length}</small>`:""}</span><div class="track"><div class="fill" style="width:${w}%"></div></div><span class="v num">${fmtEUR(c.amt)} <small>${p}%</small></span></div>${voci}`;}).join("");
+  if(!E("bars").dataset.bound){E("bars").dataset.bound="1";
+    const toggle=(b)=>{const el=E(b.getAttribute("data-cv"));if(!el)return;const open=el.hasAttribute("hidden");if(open)el.removeAttribute("hidden");else el.setAttribute("hidden","");b.setAttribute("aria-expanded",open?"true":"false");b.classList.toggle("open",open);};
+    E("bars").addEventListener("click",(e)=>{const b=e.target.closest(".bar.clk");if(b)toggle(b);});
+    E("bars").addEventListener("keydown",(e)=>{if(e.key!=="Enter"&&e.key!==" ")return;const b=e.target.closest(".bar.clk");if(b){e.preventDefault();toggle(b);}});}
   let rec="";
   if(nd.length)rec+=`<div class="recon">↺ <b style="color:var(--ink-2)">Da riconciliare</b> (non è spesa in più): ${nd.map(c=>esc(c.cat)+" "+fmtEUR(c.amt)).join(" · ")}</div>`;
   if(nonsp.length)rec+=`<div class="recon">⇄ <b style="color:var(--ink-2)">Esclusi · non spese</b> (travasi tra conti tuoi, contante nel borsello): ${nonsp.map(c=>esc(c.cat)+" "+fmtEUR(c.amt)).join(" · ")}</div>`;
