@@ -532,24 +532,48 @@ function calcBorsello(){const s=getSaldi();
   });
   return {base,d0,spese,nSpese,prelievi,saldo:+(base+prelievi-spese).toFixed(2)};
 }
+/* Saldo live per uno strumento a carta (Revolut): checkpoint (ultimo estratto) + somma dei movimenti di
+   quello strumento registrati DOPO, col loro segno (spese negative, ricariche positive). ING NON usa questo:
+   ha troppi movimenti automatici che non passano da Jasper → resta il saldo da estratto. */
+function calcSaldoLive(baseKey,dataKey,strumPat){const s=getSaldi();
+  if(s[baseKey]==null||s[baseKey]==="")return null;
+  const base=+s[baseKey]||0,d0=s[dataKey]||"";
+  let mov=0,n=0;
+  (Array.isArray(mlItems)?mlItems:[]).forEach(m=>{
+    if(!strumPat.test(String(m.strumento||"")))return;
+    const dt=String(m.data||"");
+    if(!d0||dt>d0){mov+=(+m.importo||0);n++;}
+  });
+  return {base,d0,mov:+mov.toFixed(2),n,saldo:+(base+mov).toFixed(2)};
+}
 function renderDisponibilita(p){const host=E("dDisp");if(!host)return;
-  const s=getSaldi();
-  const rows=[["ing","Conto ING","🏦"],["revolut","Revolut ••3351","💳"]];
-  const val=(k)=>{const v=s[k];return v==null?"":v;};
-  const borsBase=(s.borsello_base==null)?"":s.borsello_base;
-  host.innerHTML=`<div class="disp">`+rows.map(([k,lab,ic])=>`<div class="dispbox"><div class="dl">${ic} ${esc(lab)}</div><input type="number" class="disp-in" data-k="${k}" value="${val(k)}" step="0.01" inputmode="decimal" placeholder="0,00"></div>`).join("")+
-    `<div class="dispbox"><div class="dl">👛 Contante — saldo contato</div><input type="number" class="disp-in" data-k="borsello_base" value="${borsBase}" step="0.01" inputmode="decimal" placeholder="conta e inserisci"></div></div>
+  const s=getSaldi();const v=(k)=>{const x=s[k];return x==null?"":x;};
+  host.innerHTML=`<div class="disp">
+      <div class="dispbox"><div class="dl">🏦 Conto ING — estratto</div><input type="number" class="disp-in" data-k="ing" value="${v('ing')}" step="0.01" inputmode="decimal" placeholder="da estratto"></div>
+      <div class="dispbox"><div class="dl">💳 Revolut — saldo estratto</div><input type="number" class="disp-in" data-k="revolut_base" value="${v('revolut_base')}" step="0.01" inputmode="decimal" placeholder="da estratto"></div>
+      <div class="dispbox"><div class="dl">👛 Contante — saldo contato</div><input type="number" class="disp-in" data-k="borsello_base" value="${v('borsello_base')}" step="0.01" inputmode="decimal" placeholder="conta e inserisci"></div>
+    </div>
     <div class="disptot">Totale disponibile: <b id="dispTot" class="num">—</b></div>
-    <div id="borsCalc"></div>
-    <div style="font-size:11px;color:var(--muted);margin-top:8px">Il <b>contante è calcolato</b>: inserisci il saldo che <b>conti</b> nel borsellino (👛) — l'app sottrae da sola le spese in contante che Jasper registra. Quando ricconti, aggiorna il valore. ING/Revolut: aggiorna dagli estratti.</div>`;
-  const renderBorsCalc=()=>{const c=calcBorsello();if(!c){E("borsCalc").innerHTML="";return 0;}
-    E("borsCalc").innerHTML=`<div class="recon" style="margin-top:10px">👛 <b style="color:var(--ink-2)">Borsello ora: ${fmtEUR(c.saldo)}</b> — da ${fmtEUR(c.base)} contati${c.d0?" ("+fmtData(c.d0)+")":""}${c.spese?` − ${fmtEUR(c.spese)} spese contante (${c.nSpese})`:""}${c.prelievi?` + ${fmtEUR(c.prelievi)} prelievi`:""}.</div>`;
-    return c.saldo;};
-  const upd=()=>{let t=0;host.querySelectorAll(".disp-in").forEach(i=>{if(i.dataset.k==="borsello_base")return;t+=parseFloat(i.value)||0;});
-    t+=renderBorsCalc();E("dispTot").textContent=fmtEUR(t);};
+    <div id="liveCalc"></div>
+    <div style="font-size:11px;color:var(--muted);margin-top:8px"><b>Revolut e contante</b> sono <b>calcolati live</b>: parti dal saldo (estratto / conteggio) e l'app scala i pagamenti che Jasper registra. <b>ING</b> è il saldo da <b>estratto</b> (ha movimenti automatici — stipendio, addebiti — che non passano live). A fine mese l'estratto ricalibra ogni saldo.</div>`;
+  const renderLive=()=>{
+    const rev=calcSaldoLive("revolut_base","revolut_data",/revolut/i);
+    const cash=calcBorsello();
+    let html="";
+    if(rev)html+=`<div class="recon" style="margin-top:10px">💳 <b style="color:var(--ink-2)">Revolut ora: ${fmtEUR(rev.saldo)}</b> — da ${fmtEUR(rev.base)} estratto${rev.d0?" ("+fmtData(rev.d0)+")":""}${rev.n?` ${rev.mov<0?"−":"+"} ${fmtEUR(Math.abs(rev.mov))} (${rev.n} mov.)`:""}.</div>`;
+    if(cash)html+=`<div class="recon" style="margin-top:8px">👛 <b style="color:var(--ink-2)">Borsello ora: ${fmtEUR(cash.saldo)}</b> — da ${fmtEUR(cash.base)} contati${cash.d0?" ("+fmtData(cash.d0)+")":""}${cash.spese?` − ${fmtEUR(cash.spese)} spese (${cash.nSpese})`:""}${cash.prelievi?` + ${fmtEUR(cash.prelievi)} prelievi`:""}.</div>`;
+    E("liveCalc").innerHTML=html;
+    return {rev:rev?rev.saldo:null,cash:cash?cash.saldo:null};
+  };
+  const upd=()=>{const l=renderLive();const o=getSaldi();
+    let t=(parseFloat(o.ing)||0)
+      + (l.rev!=null?l.rev:(parseFloat(o.revolut_base)||0))
+      + (l.cash!=null?l.cash:0);
+    E("dispTot").textContent=fmtEUR(t);};
   host.querySelectorAll(".disp-in").forEach(i=>{
     i.addEventListener("input",()=>{const o=getSaldi();
-      if(i.dataset.k==="borsello_base"){o.borsello_base=parseFloat(i.value)||0;o.borsello_data=todayISO();}
+      if(i.dataset.k==="revolut_base"){o.revolut_base=parseFloat(i.value)||0;o.revolut_data=todayISO();}
+      else if(i.dataset.k==="borsello_base"){o.borsello_base=parseFloat(i.value)||0;o.borsello_data=todayISO();}
       else o[i.dataset.k]=parseFloat(i.value)||0;
       setSaldi(o);upd();});
     i.addEventListener("change",()=>saveVaultConfig());});
