@@ -516,21 +516,42 @@ function renderDashboard(p){
   renderConsulente(p);
   showDash(true);
 }
-/* Disponibilità: saldi delle riserve (ING, Revolut, contante) — Revolut e borsello si alimentano da giroconti ING */
+/* Contante = saldo CALCOLATO: parti da un saldo contato (checkpoint) e l'app sottrae le spese in
+   contante registrate da Jasper (strumento "contante") e aggiunge i prelievi successivi. Fonte di
+   verità = i movimenti, non un saldo mantenuto a mano (che si disallineerebbe). */
+const todayISO=()=>{try{return new Date().toISOString().slice(0,10);}catch(e){return "";}};
+function calcBorsello(){const s=getSaldi();
+  if(s.borsello_base==null||s.borsello_base==="")return null;
+  const base=+s.borsello_base||0,d0=s.borsello_data||"";
+  let spese=0,nSpese=0,prelievi=0;
+  (Array.isArray(mlItems)?mlItems:[]).forEach(m=>{
+    const dt=String(m.data||""),imp=Math.abs(+m.importo||0);
+    const strum=String(m.strumento||"").toLowerCase(),cat=String(m.categoria||"").toLowerCase();
+    if(/contant/.test(strum)&&!/preliev/.test(cat)){ if(!d0||dt>=d0){spese+=imp;nSpese++;} }        // spesa in contante
+    else if(/preliev/.test(cat)||/contante \(borsello\)/.test(cat)){ if(d0&&dt>d0)prelievi+=imp; }   // prelievo = ricarica
+  });
+  return {base,d0,spese,nSpese,prelievi,saldo:+(base+prelievi-spese).toFixed(2)};
+}
 function renderDisponibilita(p){const host=E("dDisp");if(!host)return;
-  const s=getSaldi();const prelevato=+p.borsello||0;
-  const rows=[["ing","Conto ING","🏦"],["revolut","Revolut ••3351","💳"],["borsello","Contante (borsello)","👛"]];
-  const val=(k)=>{const v=(k==="borsello"&&s.borsello==null)?(p.borsello||""):s[k];return v==null?"":v;};
-  host.innerHTML=`<div class="disp">`+rows.map(([k,lab,ic])=>`<div class="dispbox"><div class="dl">${ic} ${esc(lab)}</div><input type="number" class="disp-in" data-k="${k}" value="${val(k)}" step="0.01" inputmode="decimal" placeholder="0,00"></div>`).join("")+`</div>
+  const s=getSaldi();
+  const rows=[["ing","Conto ING","🏦"],["revolut","Revolut ••3351","💳"]];
+  const val=(k)=>{const v=s[k];return v==null?"":v;};
+  const borsBase=(s.borsello_base==null)?"":s.borsello_base;
+  host.innerHTML=`<div class="disp">`+rows.map(([k,lab,ic])=>`<div class="dispbox"><div class="dl">${ic} ${esc(lab)}</div><input type="number" class="disp-in" data-k="${k}" value="${val(k)}" step="0.01" inputmode="decimal" placeholder="0,00"></div>`).join("")+
+    `<div class="dispbox"><div class="dl">👛 Contante — saldo contato</div><input type="number" class="disp-in" data-k="borsello_base" value="${borsBase}" step="0.01" inputmode="decimal" placeholder="conta e inserisci"></div></div>
     <div class="disptot">Totale disponibile: <b id="dispTot" class="num">—</b></div>
-    <div id="dispRecon"></div>
-    <div style="font-size:11px;color:var(--muted);margin-top:8px">Revolut e il contante sono salvadanai: si <b>caricano</b> con giroconti dal conto ING e si <b>svuotano</b> spendendo. Aggiorna un saldo quando cambia — resta sincronizzato su ogni dispositivo.</div>`;
-  const upd=()=>{let t=0,bors=0;host.querySelectorAll(".disp-in").forEach(i=>{const v=parseFloat(i.value)||0;t+=v;if(i.dataset.k==="borsello")bors=v;});
-    E("dispTot").textContent=fmtEUR(t);
-    const speso=Math.max(0,+(prelevato-bors).toFixed(2));
-    E("dispRecon").innerHTML=(prelevato>0&&speso>0)?`<div class="recon" style="margin-top:12px">🧮 <b style="color:var(--ink-2)">Riconciliazione borsello</b>: prelevato ${fmtEUR(prelevato)} − in tasca ${fmtEUR(bors)} = <b>${fmtEUR(speso)} spesi in contanti</b>, ancora da assegnare (comunicali a Jasper per smistarli nelle categorie).</div>`:"";};
+    <div id="borsCalc"></div>
+    <div style="font-size:11px;color:var(--muted);margin-top:8px">Il <b>contante è calcolato</b>: inserisci il saldo che <b>conti</b> nel borsellino (👛) — l'app sottrae da sola le spese in contante che Jasper registra. Quando ricconti, aggiorna il valore. ING/Revolut: aggiorna dagli estratti.</div>`;
+  const renderBorsCalc=()=>{const c=calcBorsello();if(!c){E("borsCalc").innerHTML="";return 0;}
+    E("borsCalc").innerHTML=`<div class="recon" style="margin-top:10px">👛 <b style="color:var(--ink-2)">Borsello ora: ${fmtEUR(c.saldo)}</b> — da ${fmtEUR(c.base)} contati${c.d0?" ("+fmtData(c.d0)+")":""}${c.spese?` − ${fmtEUR(c.spese)} spese contante (${c.nSpese})`:""}${c.prelievi?` + ${fmtEUR(c.prelievi)} prelievi`:""}.</div>`;
+    return c.saldo;};
+  const upd=()=>{let t=0;host.querySelectorAll(".disp-in").forEach(i=>{if(i.dataset.k==="borsello_base")return;t+=parseFloat(i.value)||0;});
+    t+=renderBorsCalc();E("dispTot").textContent=fmtEUR(t);};
   host.querySelectorAll(".disp-in").forEach(i=>{
-    i.addEventListener("input",()=>{const o=getSaldi();o[i.dataset.k]=parseFloat(i.value)||0;setSaldi(o);upd();});
+    i.addEventListener("input",()=>{const o=getSaldi();
+      if(i.dataset.k==="borsello_base"){o.borsello_base=parseFloat(i.value)||0;o.borsello_data=todayISO();}
+      else o[i.dataset.k]=parseFloat(i.value)||0;
+      setSaldi(o);upd();});
     i.addEventListener("change",()=>saveVaultConfig());});
   upd();
 }
