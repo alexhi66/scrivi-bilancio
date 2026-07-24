@@ -531,12 +531,17 @@ const todayISO=()=>{try{const d=new Date(),p=n=>String(n).padStart(2,"0");return
 /* Confronto checkpoint↔movimento al SECONDO (non solo per data): così le spese fatte lo stesso giorno in cui
    aggiorni il saldo, ma DOPO, scalano davvero. L'id dei movimenti live di Jasper porta l'orario: "AAAAMMGG-HHMMSS-hash". */
 const nowStamp=()=>{try{const d=new Date(),p=n=>String(n).padStart(2,"0");return ""+d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+"-"+p(d.getHours())+p(d.getMinutes())+p(d.getSeconds());}catch(e){return "";}};
-// istante del movimento: dall'id live (AAAAMMGG-HHMMSS); fallback alla sola data (storici "hist-…") a inizio giornata.
-const movStamp=(m)=>{const mm=/^(\d{8})-(\d{6})/.exec(String(m&&m.id||""));if(mm)return mm[1]+"-"+mm[2];
-  const d=String(m&&m.data||"").slice(0,10).replace(/-/g,"");return d?d+"-000000":"";};
-// istante del checkpoint: usa il timestamp completo se presente (nuovi checkpoint); i vecchi (solo data) → fine giornata,
-// così restano identici a prima (le spese dello stesso giorno restano escluse: nessuna regressione né doppio conteggio).
-const ckptStamp=(ts,data)=>{if(ts&&/^\d{8}-\d{6}$/.test(ts))return ts;const d=String(data||"").slice(0,10).replace(/-/g,"");return d?d+"-235959":"";};
+// istante del movimento per il confronto col checkpoint. Uso l'ora dell'id live (AAAAMMGG-HHMMSS) SOLO se la sua data
+// coincide con la data della spesa (registrata in giornata → ho l'ora reale). Se la spesa è stata registrata in ritardo
+// (id di un altro giorno) o è storica, conta la DATA DELLA SPESA a inizio giornata: così una spesa vecchia registrata dopo
+// il checkpoint (già inclusa nel saldo) non scala per sbaglio.
+const movStamp=(m)=>{const d=String(m&&m.data||"").slice(0,10).replace(/-/g,"");
+  const mm=/^(\d{8})-(\d{6})/.exec(String(m&&m.id||""));if(mm&&mm[1]===d)return mm[1]+"-"+mm[2];
+  return d?d+"-000000":"";};
+// istante del checkpoint: usa il timestamp completo se presente (nuovi checkpoint, salvati con l'ora); i vecchi (solo data,
+// da prima del fix) → INIZIO giornata, così scalano gli acquisti fatti quel giorno DOPO l'inserimento del saldo. Si
+// aggiornano da soli al primo re-inserimento del saldo, che salva l'ora esatta (`*_ts`) ed elimina ogni ambiguità.
+const ckptStamp=(ts,data)=>{if(ts&&/^\d{8}-\d{6}$/.test(ts))return ts;const d=String(data||"").slice(0,10).replace(/-/g,"");return d?d+"-000000":"";};
 function calcBorsello(){const s=getSaldi();
   if(s.borsello_base==null||s.borsello_base==="")return null;
   const base=+s.borsello_base||0,d0=s.borsello_data||"",c0=ckptStamp(s.borsello_ts,d0);
