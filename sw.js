@@ -1,6 +1,6 @@
 /* Service worker: offline dell'app (nessun dato utente qui).
    La PAGINA usa network-first → online vedi SEMPRE l'ultima versione; offline la cache. */
-const CACHE = "bilancio-v30";
+const CACHE = "bilancio-v31";
 const ASSETS = ["./", "./index.html", "./manifest.json", "./icon.svg"];
 
 self.addEventListener("install", (e) => {

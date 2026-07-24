@@ -225,6 +225,10 @@
         <div class="card kpi inn c4 k4"><span class="lab">Entrate</span><span class="val num" id="kIn">—</span><span class="foot" id="kInFoot"></span></div>
         <div class="card kpi o c4 k4"><span class="lab">Uscite</span><span class="val num" id="kOut">—</span><span class="foot">6 fonti riconciliate</span></div>
         <div class="card kpi sav c4 k4" id="kSavCard"><span class="lab">Risparmio</span><span class="val num" id="kSav">—</span><span class="foot" id="kSavFoot"></span></div>
+        <div class="card c12" id="speseRecentiCard" style="display:none">
+          <div class="ct"><h2>🧾 Spese recenti</h2><span class="sub" id="speseRecentiHint">ultimi 2 giorni</span></div>
+          <div class="subeff-list" id="speseRecentiList"></div>
+        </div>
         <div class="card c12 dashcard" id="storicoCard" style="display:none">
           <div class="ct"><h2>Bilancio mensile</h2><span class="sub" id="storicoHint">attivo / passivo nel tempo</span></div>
           <div id="dStorico"></div>
@@ -788,10 +792,30 @@ const jasperUrl=(cfg)=>"https://api.github.com/repos/"+cfg.owner+"/"+cfg.repo+"/
 const isDaChiarire=(m)=>m.categoria==="Altro/Da rivedere"||m.stato==="da definire";
 async function loadJasper(cfg){try{
   const r=await fetch(jasperUrl(cfg),{headers:{Authorization:"Bearer "+cfg.token,Accept:"application/vnd.github+json"}});
-  if(!r.ok){E("jasperCard").style.display="none";mlItems=null;return;}
+  if(!r.ok){E("jasperCard").style.display="none";mlItems=null;renderSpeseRecenti();return;}
   const data=await r.json();mlSha=data.sha;mlItems=JSON.parse(b64ToUtf8(data.content)||"[]");renderJasper();
-}catch(e){E("jasperCard").style.display="none";}}
-function renderJasper(){const card=E("jasperCard");
+}catch(e){E("jasperCard").style.display="none";renderSpeseRecenti();}}
+/* Spese recenti: evidenzia in Panoramica i movimenti registrati (da Jasper) negli ultimi GIORNI giorni.
+   Fonte = mlItems (movimenti-live). Escludo ciò che non è spesa (prelievi, giroconti, ricariche, entrate). */
+function renderSpeseRecenti(){const card=E("speseRecentiCard"),host=E("speseRecentiList");if(!card||!host)return;
+  if(!Array.isArray(mlItems)){card.style.display="none";return;}
+  const GIORNI=2;let cut="";
+  try{const d=new Date();d.setDate(d.getDate()-(GIORNI-1));cut=d.toISOString().slice(0,10);}catch(e){cut="";}
+  const recenti=mlItems.filter(m=>{
+    const dt=String(m.data||"").slice(0,10);if(!dt||(cut&&dt<cut))return false;
+    const cat=String(m.categoria||"").toLowerCase();
+    if(/preliev|giroconto|ricarica|contante \(borsello\)|entrat|stipendio|bonifico in/.test(cat))return false;
+    return (+m.importo||0)<=0||/da rivedere|da definire/.test(cat)||m.stato==="da definire";
+  }).sort((a,b)=>String(b.data||"").localeCompare(String(a.data||"")));
+  if(!recenti.length){card.style.display="none";return;}
+  const tot=recenti.reduce((a,m)=>a+Math.abs(+m.importo||0),0);
+  E("speseRecentiHint").textContent="ultimi "+GIORNI+" giorni · "+recenti.length+(recenti.length===1?" spesa · ":" spese · ")+fmtEUR(tot);
+  host.innerHTML=recenti.map(m=>{const d=fmtData(m.data);
+    return `<div class="cvrow"><span class="cvm"><span style="color:var(--accent);font-weight:600">${esc(d||'—')}</span> · ${esc(m.merchant||m.nota||'—')}</span><span class="cvs">${esc(m.categoria||'')}${m.strumento?' · '+esc(m.strumento):''}</span><span class="cvi num">${fmtEUR(Math.abs(+m.importo||0))}</span></div>`;
+  }).join("");
+  card.style.display="";
+}
+function renderJasper(){const card=E("jasperCard");renderSpeseRecenti();
   if(!Array.isArray(mlItems)){card.style.display="none";updateBadge();return;}
   const todo=mlItems.filter(isDaChiarire);
   if(!todo.length){card.style.display="none";E("jasperMsg").textContent="";updateBadge();return;}
