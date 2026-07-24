@@ -800,7 +800,7 @@ async function loadJasper(cfg){try{
 function renderSpeseRecenti(){const card=E("speseRecentiCard"),host=E("speseRecentiList");if(!card||!host)return;
   if(!Array.isArray(mlItems)){card.style.display="none";return;}
   const GIORNI=2;let cut="";
-  try{const d=new Date();d.setDate(d.getDate()-(GIORNI-1));cut=d.toISOString().slice(0,10);}catch(e){cut="";}
+  try{const d=new Date();d.setDate(d.getDate()-(GIORNI-1));const p=n=>String(n).padStart(2,"0");cut=d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate());}catch(e){cut="";}
   const recenti=mlItems.filter(m=>{
     const dt=String(m.data||"").slice(0,10);if(!dt||(cut&&dt<cut))return false;
     const cat=String(m.categoria||"").toLowerCase();
