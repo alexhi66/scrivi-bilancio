@@ -528,15 +528,24 @@ function renderDashboard(p){
    contante registrate da Jasper (strumento "contante") e aggiunge i prelievi successivi. Fonte di
    verità = i movimenti, non un saldo mantenuto a mano (che si disallineerebbe). */
 const todayISO=()=>{try{const d=new Date(),p=n=>String(n).padStart(2,"0");return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate());}catch(e){return "";}};
+/* Confronto checkpoint↔movimento al SECONDO (non solo per data): così le spese fatte lo stesso giorno in cui
+   aggiorni il saldo, ma DOPO, scalano davvero. L'id dei movimenti live di Jasper porta l'orario: "AAAAMMGG-HHMMSS-hash". */
+const nowStamp=()=>{try{const d=new Date(),p=n=>String(n).padStart(2,"0");return ""+d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+"-"+p(d.getHours())+p(d.getMinutes())+p(d.getSeconds());}catch(e){return "";}};
+// istante del movimento: dall'id live (AAAAMMGG-HHMMSS); fallback alla sola data (storici "hist-…") a inizio giornata.
+const movStamp=(m)=>{const mm=/^(\d{8})-(\d{6})/.exec(String(m&&m.id||""));if(mm)return mm[1]+"-"+mm[2];
+  const d=String(m&&m.data||"").slice(0,10).replace(/-/g,"");return d?d+"-000000":"";};
+// istante del checkpoint: usa il timestamp completo se presente (nuovi checkpoint); i vecchi (solo data) → fine giornata,
+// così restano identici a prima (le spese dello stesso giorno restano escluse: nessuna regressione né doppio conteggio).
+const ckptStamp=(ts,data)=>{if(ts&&/^\d{8}-\d{6}$/.test(ts))return ts;const d=String(data||"").slice(0,10).replace(/-/g,"");return d?d+"-235959":"";};
 function calcBorsello(){const s=getSaldi();
   if(s.borsello_base==null||s.borsello_base==="")return null;
-  const base=+s.borsello_base||0,d0=s.borsello_data||"";
+  const base=+s.borsello_base||0,d0=s.borsello_data||"",c0=ckptStamp(s.borsello_ts,d0);
   let spese=0,nSpese=0,prelievi=0;
   (Array.isArray(mlItems)?mlItems:[]).forEach(m=>{
-    const dt=String(m.data||""),imp=Math.abs(+m.importo||0);
+    const imp=Math.abs(+m.importo||0),after=!c0||movStamp(m)>c0;
     const strum=String(m.strumento||"").toLowerCase(),cat=String(m.categoria||"").toLowerCase();
-    if(/contant/.test(strum)&&!/preliev/.test(cat)){ if(!d0||dt>d0){spese+=imp;nSpese++;} }          // spesa in contante DOPO il checkpoint
-    else if(/preliev/.test(cat)||/contante \(borsello\)/.test(cat)){ if(d0&&dt>d0)prelievi+=imp; }   // prelievo = ricarica
+    if(/contant/.test(strum)&&!/preliev/.test(cat)){ if(after){spese+=imp;nSpese++;} }          // spesa in contante DOPO il checkpoint
+    else if(/preliev/.test(cat)||/contante \(borsello\)/.test(cat)){ if(c0&&after)prelievi+=imp; }   // prelievo = ricarica
   });
   return {base,d0,spese,nSpese,prelievi,saldo:+(base+prelievi-spese).toFixed(2)};
 }
@@ -545,12 +554,11 @@ function calcBorsello(){const s=getSaldi();
    ha troppi movimenti automatici che non passano da Jasper → resta il saldo da estratto. */
 function calcSaldoLive(baseKey,dataKey,strumPat){const s=getSaldi();
   if(s[baseKey]==null||s[baseKey]==="")return null;
-  const base=+s[baseKey]||0,d0=s[dataKey]||"";
+  const base=+s[baseKey]||0,d0=s[dataKey]||"",c0=ckptStamp(s[dataKey.replace("_data","_ts")],d0);
   let mov=0,n=0;
   (Array.isArray(mlItems)?mlItems:[]).forEach(m=>{
     if(!strumPat.test(String(m.strumento||"")))return;
-    const dt=String(m.data||"");
-    if(!d0||dt>d0){mov+=(+m.importo||0);n++;}
+    if(!c0||movStamp(m)>c0){mov+=(+m.importo||0);n++;}
   });
   return {base,d0,mov:+mov.toFixed(2),n,saldo:+(base+mov).toFixed(2)};
 }
@@ -585,9 +593,9 @@ function renderDisponibilita(p){const host=E("dDisp");if(!host)return;
     E("dispTot").textContent=fmtEUR(t);};
   host.querySelectorAll(".disp-in").forEach(i=>{
     i.addEventListener("input",()=>{const o=getSaldi();
-      if(i.dataset.k==="revolut_base"){o.revolut_base=parseFloat(i.value)||0;o.revolut_data=todayISO();}
-      else if(i.dataset.k==="borsello_base"){o.borsello_base=parseFloat(i.value)||0;o.borsello_data=todayISO();}
-      else if(i.dataset.k==="ing"){o.ing=parseFloat(i.value)||0;o.ing_data=todayISO();}
+      if(i.dataset.k==="revolut_base"){o.revolut_base=parseFloat(i.value)||0;o.revolut_data=todayISO();o.revolut_ts=nowStamp();}
+      else if(i.dataset.k==="borsello_base"){o.borsello_base=parseFloat(i.value)||0;o.borsello_data=todayISO();o.borsello_ts=nowStamp();}
+      else if(i.dataset.k==="ing"){o.ing=parseFloat(i.value)||0;o.ing_data=todayISO();o.ing_ts=nowStamp();}
       else o[i.dataset.k]=parseFloat(i.value)||0;
       setSaldi(o);upd();});
     i.addEventListener("change",()=>saveVaultConfig());});
