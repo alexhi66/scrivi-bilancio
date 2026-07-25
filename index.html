@@ -570,22 +570,23 @@ function calcSaldoLive(baseKey,dataKey,strumPat){const s=getSaldi();
 function renderDisponibilita(p){const host=E("dDisp");if(!host)return;
   const s=getSaldi();const v=(k)=>{const x=s[k];return x==null?"":x;};
   host.innerHTML=`<div class="disp">
-      <div class="dispbox"><div class="dl">🏦 Conto ING — estratto (scala le spese debito)</div><input type="number" class="disp-in" data-k="ing" value="${v('ing')}" step="0.01" inputmode="decimal" placeholder="da estratto"></div>
+      <div class="dispbox"><div class="dl">🏦 Conto ING — estratto (scala debito + bonifici)</div><input type="number" class="disp-in" data-k="ing" value="${v('ing')}" step="0.01" inputmode="decimal" placeholder="da estratto"></div>
       <div class="dispbox"><div class="dl">💳 Revolut — saldo estratto</div><input type="number" class="disp-in" data-k="revolut_base" value="${v('revolut_base')}" step="0.01" inputmode="decimal" placeholder="da estratto"></div>
       <div class="dispbox"><div class="dl">👛 Contante — saldo contato</div><input type="number" class="disp-in" data-k="borsello_base" value="${v('borsello_base')}" step="0.01" inputmode="decimal" placeholder="conta e inserisci"></div>
     </div>
     <div class="disptot">Totale disponibile: <b id="dispTot" class="num">—</b></div>
     <div id="liveCalc"></div>
-    <div style="font-size:11px;color:var(--muted);margin-top:8px"><b>Revolut, contante e carta di debito</b> sono <b>calcolati live</b>: inserisci il saldo che hai <b>adesso</b> (estratto Revolut / contante contato / estratto ING) e l'app scala i pagamenti <b>successivi</b> che Jasper registra. Sul <b>conto ING</b> scalano solo le <b>spese con carta di debito</b> (quelle che passano live); stipendio e addebiti automatici restano da <b>estratto</b>. A fine mese l'estratto ricalibra ogni saldo.</div>`;
+    <div style="font-size:11px;color:var(--muted);margin-top:8px"><b>Revolut, contante e carta di debito</b> sono <b>calcolati live</b>: inserisci il saldo che hai <b>adesso</b> (estratto Revolut / contante contato / estratto ING) e l'app scala i pagamenti <b>successivi</b> che Jasper registra. Sul <b>conto ING</b> scalano le <b>spese con carta di debito</b> e i <b>bonifici/pagamenti dal conto</b> che Jasper registra live; stipendio e addebiti automatici restano da <b>estratto</b>. A fine mese l'estratto ricalibra ogni saldo.</div>`;
   const renderLive=()=>{
     const s2=getSaldi();
-    // Conto ING live SOLO sulle spese con carta di debito, e solo se c'è un checkpoint (ing_data):
+    // Conto ING live: spese con carta di debito + bonifici/pagamenti diretti dal conto ("conto ING") che Jasper
+    // registra; e solo se c'è un checkpoint (ing_data). Gli automatici (stipendio, SDD) non passano live → da estratto.
     // così i dati esistenti (ing senza data) restano statici e non si sottraggono spese storiche.
-    const ing=s2.ing_data?calcSaldoLive("ing","ing_data",/debito|debit|bancomat/i):null;
+    const ing=s2.ing_data?calcSaldoLive("ing","ing_data",/debito|debit|bancomat|conto ing/i):null;
     const rev=calcSaldoLive("revolut_base","revolut_data",/revolut/i);
     const cash=calcBorsello();
     let html="";
-    if(ing&&ing.n)html+=`<div class="recon" style="margin-top:10px">🏦 <b style="color:var(--ink-2)">Conto ING ora: ${fmtEUR(ing.saldo)}</b> — da ${fmtEUR(ing.base)} estratto${ing.d0?" ("+fmtData(ing.d0)+")":""} ${ing.mov<0?"−":"+"} ${fmtEUR(Math.abs(ing.mov))} spese debito (${ing.n}).</div>`;
+    if(ing&&ing.n)html+=`<div class="recon" style="margin-top:10px">🏦 <b style="color:var(--ink-2)">Conto ING ora: ${fmtEUR(ing.saldo)}</b> — da ${fmtEUR(ing.base)} estratto${ing.d0?" ("+fmtData(ing.d0)+")":""} ${ing.mov<0?"−":"+"} ${fmtEUR(Math.abs(ing.mov))} da ${ing.n} mov. (debito + bonifici).</div>`;
     if(rev)html+=`<div class="recon" style="margin-top:${ing&&ing.n?8:10}px">💳 <b style="color:var(--ink-2)">Revolut ora: ${fmtEUR(rev.saldo)}</b> — da ${fmtEUR(rev.base)} estratto${rev.d0?" ("+fmtData(rev.d0)+")":""}${rev.n?` ${rev.mov<0?"−":"+"} ${fmtEUR(Math.abs(rev.mov))} (${rev.n} mov.)`:""}.</div>`;
     if(cash)html+=`<div class="recon" style="margin-top:8px">👛 <b style="color:var(--ink-2)">Borsello ora: ${fmtEUR(cash.saldo)}</b> — da ${fmtEUR(cash.base)} contati${cash.d0?" ("+fmtData(cash.d0)+")":""}${cash.spese?` − ${fmtEUR(cash.spese)} spese (${cash.nSpese})`:""}${cash.prelievi?` + ${fmtEUR(cash.prelievi)} prelievi`:""}.</div>`;
     E("liveCalc").innerHTML=html;
