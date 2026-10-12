@@ -45,6 +45,7 @@
   .vaultbar{display:flex;align-items:center;gap:12px;margin-top:18px;flex-wrap:wrap;}
   .cfgbtn{font-size:13px;border:1px solid var(--hair-2);background:var(--surface);color:var(--ink);border-radius:9px;padding:8px 12px;cursor:pointer;}
   .cfgbtn:hover{border-color:var(--accent);color:var(--accent);}
+  .mesebar{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px;}.mesebar .obtn{text-transform:capitalize;}
   .vstatus{font-size:12.5px;color:var(--muted);}.vstatus.ok{color:var(--good);}.vstatus.err{color:var(--warn);}
   .cfgpanel{margin-top:12px;background:var(--surface);border:1px solid var(--hair);border-radius:14px;padding:16px;box-shadow:var(--elev);}
   .cfgpanel .row{display:flex;flex-direction:column;gap:4px;margin-bottom:10px;}
@@ -193,6 +194,7 @@
     <button id="csvBtn" class="cfgbtn" hidden>＋ Carica CSV</button>
     <span id="vaultStatus" class="vstatus"></span>
   </div>
+  <div id="meseBar" class="mesebar" role="tablist" aria-label="Mese" hidden></div>
   <div id="cfgPanel" class="cfgpanel" hidden>
     <div class="row"><label>Owner GitHub (nome utente)</label><input id="cfgOwner" placeholder="es. mario-rossi" autocapitalize="off" autocomplete="off" spellcheck="false"></div>
     <div class="row"><label>Repo dei dati (privato)</label><input id="cfgRepo" placeholder="es. costi-dati" autocapitalize="off" autocomplete="off" spellcheck="false"></div>
@@ -223,7 +225,7 @@
     <section class="sec" role="tabpanel" data-sec="panoramica" aria-label="Panoramica">
       <div class="grid">
         <div class="card kpi inn c4 k4"><span class="lab">Entrate</span><span class="val num" id="kIn">—</span><span class="foot" id="kInFoot"></span></div>
-        <div class="card kpi o c4 k4"><span class="lab">Uscite</span><span class="val num" id="kOut">—</span><span class="foot">6 fonti riconciliate</span></div>
+        <div class="card kpi o c4 k4"><span class="lab">Uscite</span><span class="val num" id="kOut">—</span><span class="foot" id="kOutFoot"></span></div>
         <div class="card kpi sav c4 k4" id="kSavCard"><span class="lab">Risparmio</span><span class="val num" id="kSav">—</span><span class="foot" id="kSavFoot"></span></div>
         <div class="card c12" id="speseRecentiCard" style="display:none">
           <div class="ct"><h2>🧾 Spese recenti</h2><span class="sub" id="speseRecentiHint">ultimi 2 giorni</span></div>
@@ -501,12 +503,14 @@ function renderDashboard(p){
   if(!p||!p.per_strumento){showDash(false);return;}
   E("dWfall").innerHTML=barsRow([{label:"Entrate",val:p.entrate,color:"var(--in)"},{label:"Uscite",val:p.uscite,color:"var(--out)",sign:"−"},{label:"= Risparmio",val:p.risparmio,color:"var(--warn)",sign:(p.risparmio>=0?"+":"−")}]);
   const pa=p.patrimonio||{};
+  if(p.patrimonio===null){E("dPatr").innerHTML=`<div class="ct"><h2 style="font-size:12.5px">Patrimonio per conto</h2></div><div style="font-size:11.5px;color:var(--muted)">Disponibile a mese chiuso, quando c'è l'estratto del conto nello storico.</div>`;}else{
   const patrRows=[
     {label:"Conto ING",val:pa.ing_delta||0,color:"var(--in)",sign:((pa.ing_delta||0)>=0?"+":"−")},
     {label:"Revolut",val:pa.revolut_delta||0,color:"var(--warn)",sign:((pa.revolut_delta||0)>=0?"+":"−")}];
   if(pa.contante)patrRows.push({label:"Contante (borsello)",val:pa.contante,color:"var(--accent)",sign:"+"});
   patrRows.push({label:"= Netto reale",val:pa.netto||0,color:"var(--accent)",sign:((pa.netto||0)>=0?"+":"−")});
   E("dPatr").innerHTML=`<div class="ct"><h2 style="font-size:12.5px">Patrimonio per conto</h2><span class="sub">l'illusione del solo ING</span></div><div class="bars">`+barsRow(patrRows)+`</div>`+(pa.contante?`<div style="font-size:11px;color:var(--ink-2);margin-top:8px">Il contante nel borsello è liquidità da spendere, non risparmio consolidato.</div>`:``);
+  }
   E("dNat").innerHTML=barsRow((p.per_natura||[]).map(n=>({label:n.nome,val:n.importo})));
   E("dStrum").innerHTML=barsRow((p.per_strumento||[]).map(n=>({label:n.nome,val:n.importo})));
   const sw=p.servizi_web||{};E("dWeb").innerHTML=barsRow(Object.keys(sw).map(k=>({label:k,val:sw[k]})));
@@ -516,7 +520,7 @@ function renderDashboard(p){
   const ae=p.abbonamenti_eff;
   if(ae&&Array.isArray(ae.voci)&&ae.voci.length){
     E("subEffHint").textContent=ae.voci.length+" servizi · dai movimenti reali";
-    E("dSubEff").innerHTML=`<div class="subeff-tot">${fmtEUR(ae.totale)}<small>speso in abbonamenti nel periodo (giu–lug) · sono sparsi tra AI/Tech, Utenze, Streaming</small></div>`+
+    E("dSubEff").innerHTML=`<div class="subeff-tot">${fmtEUR(ae.totale)}<small>speso in abbonamenti nel periodo ${esc(p.etichetta||"")} · sono sparsi tra AI/Tech, Utenze, Streaming</small></div>`+
       `<div class="subeff-list">`+ae.voci.map(v=>`<div class="cvrow"><span class="cvm">${esc(v.m)}</span><span class="cvi num">${fmtEURc(v.i)}</span></div>`).join("")+`</div>`;
     E("subEffCard").style.display="";
   }else if(E("subEffCard")){E("subEffCard").style.display="none";}
@@ -751,6 +755,91 @@ E("cfgClear").addEventListener("click",()=>{localStorage.removeItem(CFG_KEY);E("
 E("cfgSave").addEventListener("click",()=>{const cfg={owner:E("cfgOwner").value.trim(),repo:E("cfgRepo").value.trim(),path:(E("cfgPath").value.trim()||"costi-dati.json"),token:E("cfgToken").value.trim()};
   if(!cfg.owner||!cfg.repo||!cfg.token){setStatus("Compila owner, repo e token.","err");return;}
   localStorage.setItem(CFG_KEY,JSON.stringify(cfg));E("cfgPanel").hidden=true;loadFromVault();});
+/* ---- Cruscotto dai movimenti (movimenti-live.json): ogni sezione legge i dati aggiornati, mese per mese.
+   costi-dati.json resta solo come ripiego se movimenti-live non è raggiungibile. ---- */
+let STORICO=[];
+const MESE_KEY="bilancio_mese";
+const MESI_LUNGHI=["gennaio","febbraio","marzo","aprile","maggio","giugno","luglio","agosto","settembre","ottobre","novembre","dicembre"];
+const meseLabel=(ym)=>{const [y,m]=ym.split("-");return MESI_LUNGHI[+m-1]+" "+y;};
+const isTransfer=(m)=>m.natura==="trasferimento_interno";
+const isEntrata=(m)=>(+m.importo>0)&&!isTransfer(m)&&m.natura!=="rimborso";
+/* categorie di spesa ricorrente: qui si cercano gli abbonamenti (non la spesa al supermercato) */
+const CAT_RICORRENTI=/ai\/tech|abbonamenti|streaming|utenze|disc joker|finanziamenti/i;
+const CAT_FISSE=/casa\/affitti|utenze|finanziamenti|matteo — affitto/i;
+const SUB_ALIAS=[[/anthropic|claude/i,"Claude (Anthropic)"],[/openai|chatgpt/i,"ChatGPT (OpenAI)"],[/supabase/i,"Supabase"],[/vercel/i,"Vercel"],
+  [/fal\.ai|fal features/i,"Fal.ai"],[/vidiq/i,"vidIQ"],[/netflix/i,"Netflix"],[/spotify/i,"Spotify"],[/google ai pro|google one/i,"Google AI Pro"],
+  [/back then/i,"Back Then"],[/abacus/i,"Abacus.AI"],[/deepseek|shenduq|deepseerwea/i,"DeepSeek"],[/vodafone/i,"Vodafone"],[/hostinger/i,"Hostinger"],
+  [/medinfinity|mediaset/i,"Mediaset Infinity"],[/\*now|now\/sky|now tv/i,"NOW/Sky"],[/primevideo|prime video/i,"Prime Video"],[/roboform/i,"RoboForm"],
+  [/beatport/i,"Beatport"],[/avast/i,"Avast"],[/suno/i,"Suno"],[/heygen/i,"HeyGen"],[/openart/i,"OpenArt"],[/cofidis/i,"Cofidis"],[/alperia/i,"Alperia"],[/seab/i,"SEAB"]];
+const subKey=(m)=>{const t=String(m.merchant||"");for(const [re,n] of SUB_ALIAS)if(re.test(t))return n;
+  return t.replace(/\(.*?\)/g,"").replace(/[^A-Za-zÀ-ÿ ]+/g," ").trim().split(/\s+/).slice(0,2).join(" ")||t;};
+const prevYM=(ym,k)=>{let [y,m]=ym.split("-").map(Number);m-=k;while(m<1){m+=12;y--;}return y+"-"+String(m).padStart(2,"0");};
+function buildPeriodo(items,ym){
+  const inMese=items.filter(m=>String(m.data||"").slice(0,7)===ym);
+  const r2=(n)=>Math.round(n*100)/100;
+  const entrate=r2(inMese.filter(isEntrata).reduce((a,m)=>a+(+m.importo),0));
+  // spese: uscite reali + rimborsi a scalare; travasi e prelievi esclusi (restano tuoi)
+  const spese=inMese.filter(m=>!isTransfer(m)&&((+m.importo<0)||m.natura==="rimborso"));
+  const byCat={};
+  spese.forEach(m=>{const c=m.categoria||"Altro/Da rivedere";(byCat[c]=byCat[c]||{cat:c,importo:0,voci:[]});
+    byCat[c].importo-=(+m.importo);byCat[c].voci.push({m:m.merchant||"",i:-(+m.importo),s:m.strumento||"",d:m.data});});
+  const categorie=Object.values(byCat).map(c=>({...c,importo:r2(c.importo),voci:c.voci.sort((a,b)=>b.i-a.i)})).filter(c=>Math.abs(c.importo)>=0.005).sort((a,b)=>b.importo-a.importo);
+  const uscite=r2(categorie.filter(c=>!isNonSpesa(c.cat)).reduce((a,c)=>a+c.importo,0));
+  const spReali=spese.filter(m=>!isNonSpesa(m.categoria||""));
+  const perStr={};spReali.forEach(m=>{const k=m.strumento||"?";perStr[k]=(perStr[k]||0)-(+m.importo);});
+  // ricorrenti: stesso servizio in almeno 2 degli ultimi 3 mesi (finestra che termina col mese scelto)
+  const win=[ym,prevYM(ym,1),prevYM(ym,2)];
+  const sub={};items.filter(m=>win.includes(String(m.data||"").slice(0,7))&&+m.importo<0&&!isTransfer(m)&&CAT_RICORRENTI.test(m.categoria||"")).forEach(m=>{
+    const k=subKey(m);const s=(sub[k]=sub[k]||{servizio:k,categoria:m.categoria,mesi:{},tot:0});s.mesi[String(m.data).slice(0,7)]=1;s.tot-=(+m.importo);});
+  const ric=Object.values(sub).filter(s=>Object.keys(s.mesi).length>=2);
+  const ricSet=new Set(ric.map(s=>s.servizio));
+  const abbonamenti=ric.map(s=>({servizio:s.servizio,categoria:s.categoria,mese:r2(s.tot/Object.keys(s.mesi).length),
+    natura:CAT_FISSE.test(s.categoria)?"Spese fisse":"Abbonamenti"}));
+  const eff={};spReali.filter(m=>+m.importo<0&&ricSet.has(subKey(m))).forEach(m=>{const k=subKey(m);eff[k]=(eff[k]||0)-(+m.importo);});
+  const effVoci=Object.entries(eff).map(([m,i])=>({m,i:r2(i)})).sort((a,b)=>b.i-a.i);
+  let nFisse=0,nAbbo=0,nCons=0;
+  spReali.forEach(m=>{const v=-(+m.importo);if(CAT_FISSE.test(m.categoria||""))nFisse+=v;else if(ricSet.has(subKey(m)))nAbbo+=v;else nCons+=v;});
+  const web={};spReali.forEach(m=>{const c=m.categoria||"";const k=/ai\/tech/i.test(c)?"AI/Tech":/streaming|abbonamenti/i.test(c)?"Streaming":/disc joker/i.test(c)?"Disc Joker":null;if(k)web[k]=r2((web[k]||0)-(+m.importo));});
+  // patrimonio: solo a mese chiuso, dallo storico (estratto conto verificato)
+  const st=STORICO.find(x=>x.mese===ym);let patrimonio=null;
+  if(st){const rev=inMese.filter(m=>/revolut/i.test(m.strumento||""));
+    const revIn=rev.filter(m=>isTransfer(m)&&+m.importo>0).reduce((a,m)=>a+(+m.importo),0),revOut=rev.filter(m=>!isTransfer(m)&&+m.importo<0).reduce((a,m)=>a-(+m.importo),0);
+    const cash=inMese.filter(m=>/contante/i.test(m.strumento||"")).reduce((a,m)=>a-(+m.importo),0);
+    const prel=inMese.filter(m=>isNonSpesa(m.categoria||"")).reduce((a,m)=>a-(+m.importo),0);
+    const ing=r2(st.entrate-st.uscite-st.travasi),revD=r2(revIn-revOut),cont=r2(prel-cash);
+    patrimonio={ing_delta:ing,revolut_delta:revD,contante:Math.max(0,cont),netto:r2(ing+revD+Math.max(0,cont))};}
+  const ultimo=inMese.reduce((a,m)=>String(m.data)>a?String(m.data):a,"");
+  const daDef=inMese.filter(m=>m.stato==="da definire").length;
+  const impr=byCat["Imprevisti"]?r2(byCat["Imprevisti"].importo):0;
+  const note=[`Dai movimenti registrati · aggiornati al ${fmtData(ultimo)||"—"}`,
+    "Uscite per competenza: la carta di credito conta nel mese dell'acquisto, non dell'addebito"];
+  if(impr)note.push(`Imprevisti ${fmtEUR(impr)}: senza, le uscite sarebbero ${fmtEUR(uscite-impr)}`);
+  if(daDef)note.push(`${daDef} movimenti da definire (vedi Da fare)`);
+  return {etichetta:meseLabel(ym),entrate,uscite,risparmio:r2(entrate-uscite),categorie,
+    per_strumento:Object.entries(perStr).map(([nome,v])=>({nome,importo:r2(v)})).sort((a,b)=>b.importo-a.importo),
+    per_natura:[{nome:"A consumo / variabile",importo:r2(nCons)},{nome:"Spese fisse",importo:r2(nFisse)},{nome:"Abbonamenti",importo:r2(nAbbo)}].filter(x=>x.importo>0),
+    abbonamenti,abbonamenti_eff:{totale:r2(effVoci.reduce((a,v)=>a+v.i,0)),voci:effVoci},servizi_web:web,patrimonio,borsello:0,note,
+    nMov:inMese.length,ultimo};
+}
+function mesiDisponibili(){if(!Array.isArray(mlItems))return [];
+  // un mese chiuso con pochi movimenti è un buco nei dati (es. giugno: è solo nella fotografia), non un mese tranquillo: non lo mostro
+  const cur=todayISO().slice(0,7),n={};mlItems.forEach(m=>{const k=String(m.data||"").slice(0,7);if(/^\d{4}-\d{2}$/.test(k))n[k]=(n[k]||0)+1;});
+  return Object.keys(n).filter(k=>k===cur||n[k]>=10).sort().reverse();}
+function meseDefault(mesi){const cur=todayISO().slice(0,7);const chiuso=mesi.find(x=>x<cur);
+  let sav="";try{sav=localStorage.getItem(MESE_KEY)||"";}catch(e){}
+  return mesi.includes(sav)?sav:(chiuso||mesi[0]);}
+function renderMeseBar(){const bar=E("meseBar"),mesi=mesiDisponibili().slice(0,6);
+  if(!mesi.length){bar.hidden=true;return;}
+  const sel=meseDefault(mesi);bar.hidden=false;
+  bar.innerHTML=mesi.map(ym=>`<button class="obtn${ym===sel?" on":""}" role="tab" aria-selected="${ym===sel}" data-ym="${ym}">${esc(meseLabel(ym))}${ym===todayISO().slice(0,7)?" · in corso":""}</button>`).join("");
+  bar.querySelectorAll(".obtn").forEach(b=>b.addEventListener("click",()=>{try{localStorage.setItem(MESE_KEY,b.dataset.ym);}catch(e){}renderMeseBar();}));
+  renderMese(sel);}
+function renderMese(ym){const p=buildPeriodo(mlItems,ym);
+  renderResult({entrate:p.entrate,uscite:p.uscite,risparmio:p.risparmio,categorie:p.categorie,note:p.note},null);
+  E("kOutFoot").textContent=p.nMov+" movimenti · al "+(fmtData(p.ultimo)||"—");
+  renderDashboard(p);
+  setStatus("✓ "+p.etichetta+" · dati al "+(fmtData(p.ultimo)||"—"),"ok");}
+
 async function loadFromVault(){const cfg=getCfg();if(!cfg)return;E("refreshBtn").hidden=false;
   const _rb=E("refreshBtn");_rb.disabled=true;_rb.textContent="↻ Aggiorno…";
   const _done=()=>{_rb.disabled=false;_rb.textContent="↻ Aggiorna";};
@@ -764,7 +853,7 @@ async function loadFromVault(){const cfg=getCfg();if(!cfg)return;E("refreshBtn")
     renderDashboard(p);E("clarifyCard").style.display="none";E("out").scrollIntoView({behavior:"smooth",block:"start"});
     setStatus("✓ Caricato dal vault"+(p.etichetta?" ("+p.etichetta+")":""),"ok");
     collapseUpload(true);   // dati dal vault presenti → la dashboard è protagonista, upload in secondo piano
-    await loadVaultConfig(cfg);loadJasper(cfg);loadStorico(cfg);
+    await loadVaultConfig(cfg);await Promise.all([loadJasper(cfg),loadStorico(cfg)]);renderMeseBar();
   }catch(e){setStatus("Errore: "+e.message,"err");}finally{_done();}}
 
 /* ---- Bilancio storico mensile (storico-mensile.json · da estratti verificati) ---- */
@@ -773,7 +862,7 @@ async function loadStorico(cfg){try{
   const r=await fetch(url,{headers:{Authorization:"Bearer "+cfg.token,Accept:"application/vnd.github+json"}});
   if(!r.ok){E("storicoCard").style.display="none";return;}
   const data=await r.json();const st=JSON.parse(b64ToUtf8(data.content)||"[]");
-  renderBilancioStorico(Array.isArray(st)?st:[]);
+  STORICO=Array.isArray(st)?st:[];renderBilancioStorico(STORICO);
 }catch(e){E("storicoCard").style.display="none";}}
 function renderBilancioStorico(st){const host=E("dStorico"),card=E("storicoCard");
   if(!host||!st.length){if(card)card.style.display="none";return;}
