@@ -550,14 +550,15 @@ const ckptStamp=(ts,data)=>{if(ts&&/^\d{8}-\d{6}$/.test(ts))return ts;const d=St
 function calcBorsello(){const s=getSaldi();
   if(s.borsello_base==null||s.borsello_base==="")return null;
   const base=+s.borsello_base||0,d0=s.borsello_data||"",c0=ckptStamp(s.borsello_ts,d0);
-  let spese=0,nSpese=0,prelievi=0;
+  let spese=0,nSpese=0,prelievi=0,entrate=0,nEntrate=0;
   (Array.isArray(mlItems)?mlItems:[]).forEach(m=>{
     const imp=Math.abs(+m.importo||0),after=!c0||movStamp(m)>c0;
     const strum=String(m.strumento||"").toLowerCase(),cat=String(m.categoria||"").toLowerCase();
-    if(/contant/.test(strum)&&!/preliev/.test(cat)){ if(after){spese+=imp;nSpese++;} }          // spesa in contante DOPO il checkpoint
+    if(/contant/.test(strum)&&!/preliev/.test(cat)&&(+m.importo||0)>0){ if(after){entrate+=imp;nEntrate++;} }   // entrata in contante (es. mance) DOPO il checkpoint: il borsello sale
+    else if(/contant/.test(strum)&&!/preliev/.test(cat)){ if(after){spese+=imp;nSpese++;} }          // spesa in contante DOPO il checkpoint
     else if(/preliev/.test(cat)||/contante \(borsello\)/.test(cat)){ if(c0&&after)prelievi+=imp; }   // prelievo = ricarica
   });
-  return {base,d0,spese,nSpese,prelievi,saldo:+(base+prelievi-spese).toFixed(2)};
+  return {base,d0,spese,nSpese,prelievi,entrate,nEntrate,saldo:+(base+prelievi+entrate-spese).toFixed(2)};
 }
 /* Saldo live per uno strumento a carta (Revolut): checkpoint (ultimo estratto) + somma dei movimenti di
    quello strumento registrati DOPO, col loro segno (spese negative, ricariche positive). ING NON usa questo:
@@ -593,7 +594,7 @@ function renderDisponibilita(p){const host=E("dDisp");if(!host)return;
     let html="";
     if(ing&&ing.n)html+=`<div class="recon" style="margin-top:10px">🏦 <b style="color:var(--ink-2)">Conto ING ora: ${fmtEUR(ing.saldo)}</b> — da ${fmtEUR(ing.base)} estratto${ing.d0?" ("+fmtData(ing.d0)+")":""} ${ing.mov<0?"−":"+"} ${fmtEUR(Math.abs(ing.mov))} da ${ing.n} mov. (debito + bonifici).</div>`;
     if(rev)html+=`<div class="recon" style="margin-top:${ing&&ing.n?8:10}px">💳 <b style="color:var(--ink-2)">Revolut ora: ${fmtEUR(rev.saldo)}</b> — da ${fmtEUR(rev.base)} estratto${rev.d0?" ("+fmtData(rev.d0)+")":""}${rev.n?` ${rev.mov<0?"−":"+"} ${fmtEUR(Math.abs(rev.mov))} (${rev.n} mov.)`:""}.</div>`;
-    if(cash)html+=`<div class="recon" style="margin-top:8px">👛 <b style="color:var(--ink-2)">Borsello ora: ${fmtEUR(cash.saldo)}</b> — da ${fmtEUR(cash.base)} contati${cash.d0?" ("+fmtData(cash.d0)+")":""}${cash.spese?` − ${fmtEUR(cash.spese)} spese (${cash.nSpese})`:""}${cash.prelievi?` + ${fmtEUR(cash.prelievi)} prelievi`:""}.</div>`;
+    if(cash)html+=`<div class="recon" style="margin-top:8px">👛 <b style="color:var(--ink-2)">Borsello ora: ${fmtEUR(cash.saldo)}</b> — da ${fmtEUR(cash.base)} contati${cash.d0?" ("+fmtData(cash.d0)+")":""}${cash.spese?` − ${fmtEUR(cash.spese)} spese (${cash.nSpese})`:""}${cash.prelievi?` + ${fmtEUR(cash.prelievi)} prelievi`:""}${cash.entrate?` + ${fmtEUR(cash.entrate)} entrate (${cash.nEntrate})`:""}.</div>`;
     E("liveCalc").innerHTML=html;
     return {ing:ing?ing.saldo:null,rev:rev?rev.saldo:null,cash:cash?cash.saldo:null};
   };
